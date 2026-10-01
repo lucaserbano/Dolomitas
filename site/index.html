@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alta Via 1 — Dolomitas</title>
+<meta name="description" content="Travessia de seis dias pela Alta Via 1, nos Dolomitas: 73,6 km e 4.135 m de ganho de elevação em mapa de terreno 3D.">
+<meta name="theme-color" content="#202c39">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23202c39'/%3E%3Cpath d='M16 7l9 18H7z' fill='%23f2d492'/%3E%3Cpath d='M16 7l4.5 9-4.5 3-3-2z' fill='%23f29559'/%3E%3C/svg%3E">
+
+<link rel="stylesheet" href="https://use.typekit.net/jtw3pqo.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ───────────────────────── abertura ───────────────────────── -->
+<section id="intro" aria-label="Apresentação">
+  <div class="intro-moldura">
+    <p class="intro-sobretitulo">Dolomitas · Setembro de 2026</p>
+
+    <h1 class="intro-titulo">
+      <span class="intro-alta">Alta</span>
+      <span class="intro-via">Via<em>1</em></span>
+    </h1>
+
+    <div class="regua-dupla" role="presentation"></div>
+
+    <p class="intro-linha">Lago di Braies <span class="seta">→</span> Borca di Cadore</p>
+
+    <dl class="intro-numeros">
+      <div><dt>Distância</dt><dd data-resumo="dist">—</dd></div>
+      <div><dt>Subida</dt><dd data-resumo="ganho">—</dd></div>
+      <div><dt>Descida</dt><dd data-resumo="perda">—</dd></div>
+      <div><dt>Etapas</dt><dd data-resumo="dias">—</dd></div>
+    </dl>
+
+    <button id="btn-comecar" class="botao-partida" type="button">
+      <span class="botao-partida-icone" aria-hidden="true"></span>
+      <span>Iniciar travessia</span>
+    </button>
+
+    <p id="aviso" class="aviso" hidden></p>
+  </div>
+</section>
+
+<!-- ───────────────────────── aplicação ───────────────────────── -->
+<div id="app" aria-hidden="true">
+
+  <aside id="painel">
+    <header class="painel-topo">
+      <p class="marca">Alta Via <em>1</em></p>
+      <p class="marca-sub">Dolomitas</p>
+    </header>
+
+    <section class="etapa" aria-live="polite">
+      <p class="etapa-rotulo">Etapa <span data-campo="diaNum">1</span> <span class="etapa-data" data-campo="diaData"></span></p>
+      <h2 class="etapa-nome">
+        <span data-campo="diaDe">—</span>
+        <span class="seta" aria-hidden="true">→</span>
+        <span data-campo="diaPara">—</span>
+      </h2>
+    </section>
+
+    <section class="instrumentos">
+      <div class="medida medida-destaque">
+        <p class="medida-rotulo">Altitude</p>
+        <p class="medida-valor"><span data-campo="altitude">0</span><i>m</i></p>
+      </div>
+      <div class="medida medida-destaque medida-fc">
+        <p class="medida-rotulo">Frequência</p>
+        <p class="medida-valor"><span data-campo="fc">0</span><i>bpm</i></p>
+      </div>
+
+      <div class="medida"><p class="medida-rotulo">Em movimento</p><p class="medida-valor"><span data-campo="duracao">0h00</span></p></div>
+      <div class="medida"><p class="medida-rotulo">Desde a partida</p><p class="medida-valor"><span data-campo="decorrido">0h00</span></p></div>
+      <div class="medida"><p class="medida-rotulo">Subida no dia</p><p class="medida-valor medida-sobe"><span data-campo="ganho">0</span><i>m</i></p></div>
+      <div class="medida"><p class="medida-rotulo">Descida no dia</p><p class="medida-valor medida-desce"><span data-campo="perda">0</span><i>m</i></p></div>
+      <div class="medida"><p class="medida-rotulo">Distância</p><p class="medida-valor"><span data-campo="distDia">0,0</span><i>km</i></p></div>
+      <div class="medida"><p class="medida-rotulo">Acumulado</p><p class="medida-valor"><span data-campo="distTotal">0,0</span><i>km</i><br><span class="medida-de">de <span data-resumo="distCurto">—</span></span></p></div>
+    </section>
+
+    <section class="perfil" aria-label="Perfil de elevação da etapa">
+      <svg id="perfil-svg" viewBox="0 0 320 96" preserveAspectRatio="none" role="img" aria-hidden="true">
+        <path id="perfil-area" d=""></path>
+        <path id="perfil-linha" d=""></path>
+        <line id="perfil-cursor" x1="0" y1="0" x2="0" y2="96"></line>
+      </svg>
+      <div class="perfil-escala">
+        <span data-campo="perfilMin">—</span>
+        <span data-campo="perfilMax">—</span>
+      </div>
+    </section>
+  </aside>
+
+  <main id="palco">
+    <div id="mapa"></div>
+
+    <!-- resumo ao fim de cada etapa -->
+    <section id="resumo" class="resumo" hidden aria-live="polite">
+      <p class="resumo-rotulo">Etapa <span data-campo="rDia"></span> concluída</p>
+      <h3 class="resumo-destino" data-campo="rDestino"></h3>
+      <dl class="resumo-grade">
+        <div><dt>Distância</dt><dd data-campo="rDist"></dd></div>
+        <div><dt>Subida</dt><dd data-campo="rGanho"></dd></div>
+        <div><dt>Descida</dt><dd data-campo="rPerda"></dd></div>
+        <div><dt>Alt. máx</dt><dd data-campo="rEleMax"></dd></div>
+        <div><dt>Movimento</dt><dd data-campo="rMov"></dd></div>
+        <div><dt>FC média</dt><dd data-campo="rFcMed"></dd></div>
+        <div><dt>FC máx</dt><dd data-campo="rFcMax"></dd></div>
+        <div><dt>Energia</dt><dd data-campo="rKcal"></dd></div>
+      </dl>
+      <button id="btn-seguir" class="botao-seguir" type="button">
+        <span data-campo="rProximo">Seguir</span>
+      </button>
+    </section>
+
+    <!-- foto ou vídeo do trecho -->
+    <figure id="midia" class="midia" hidden>
+      <button id="midia-fechar" class="midia-fechar" type="button" aria-label="Fechar mídia">&times;</button>
+      <div class="midia-quadro"><div id="midia-conteudo"></div></div>
+      <figcaption class="midia-legenda">
+        <span class="midia-hora" data-campo="mHora"></span>
+        <span data-campo="mLegenda"></span>
+      </figcaption>
+    </figure>
+  </main>
+
+  <footer id="transporte">
+    <button id="btn-tocar" class="botao-tocar" type="button" aria-label="Pausar">
+      <span class="icone-tocar" data-estado="tocando" aria-hidden="true"></span>
+    </button>
+
+    <div class="linha-tempo" id="linha-tempo">
+      <div class="linha-tempo-trilho" id="trilho"></div>
+      <input id="scrub" type="range" min="0" max="1000" value="0" step="1"
+             aria-label="Posição na travessia">
+    </div>
+
+    <div class="controles">
+      <label class="interruptor">
+        <input id="tgl-midias" type="checkbox" checked>
+        <span class="interruptor-pista" aria-hidden="true"><i></i></span>
+        <span class="interruptor-texto">Mídias</span>
+      </label>
+
+      <div class="velocidade" role="group" aria-label="Velocidade">
+        <button type="button" data-vel="60">1×</button>
+        <button type="button" data-vel="180" class="ativo">3×</button>
+        <button type="button" data-vel="480">8×</button>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

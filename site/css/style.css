@@ -1,0 +1,879 @@
+@charset "utf-8";
+
+/* ============================================================
+   Alta Via 1 — Dolomitas
+   Direção: diário de expedição / cartografia alpina.
+   A interface se comporta como painel de instrumento: fios finos,
+   marcações de escala e números tabulares. Nada de cartões soltos.
+   ============================================================ */
+
+:root {
+  /* paleta --------------------------------------------------- */
+  --noite:      #202c39;
+  --ardosia:    #283845;
+  --pedra:      #b8b08d;
+  --areia:      #f2d492;
+  --brasa:      #f29559;
+
+  /* neutros puxados para o azul da marca — nunca cinza puro */
+  --abismo:     #161e27;
+  --fenda:      #1b2531;
+  --tinta:      #ece6d6;
+  --tinta-meia: color-mix(in oklab, var(--pedra) 72%, var(--ardosia));
+  --tinta-fraca:color-mix(in oklab, var(--pedra) 44%, var(--ardosia));
+
+  /* fios ----------------------------------------------------- */
+  --fio:        color-mix(in oklab, var(--pedra) 16%, transparent);
+  --fio-forte:  color-mix(in oklab, var(--pedra) 30%, transparent);
+
+  /* tipografia ----------------------------------------------- */
+  --display: "baileywick-jf-gothic", "Archivo", system-ui, sans-serif;
+  --texto:   "Archivo", system-ui, -apple-system, sans-serif;
+
+  /* ritmo espacial — intervalos variados, não um padding só */
+  --e1: 0.25rem;
+  --e2: 0.5rem;
+  --e3: 0.875rem;
+  --e4: clamp(1rem, 1.6vw, 1.5rem);
+  --e5: clamp(1.5rem, 3vw, 2.75rem);
+  --e6: clamp(2.5rem, 6vw, 5rem);
+
+  --painel-larg: clamp(290px, 24vw, 360px);
+  --curva: 2px;              /* cantos quase retos: régua, não cartão */
+  --transicao: 420ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* o atributo hidden precisa vencer o display das classes abaixo */
+[hidden] { display: none !important; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--abismo);
+  color: var(--tinta);
+  font-family: var(--texto);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button, input { font: inherit; color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--areia);
+  outline-offset: 3px;
+}
+
+/* rótulo em versalete espaçado — a voz dos instrumentos */
+.medida-rotulo, .intro-numeros dt, .resumo-grade dt,
+.etapa-rotulo, .resumo-rotulo, .intro-sobretitulo, .interruptor-texto {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tinta-fraca);
+  margin: 0;
+}
+
+/* todo número que muda ao vivo usa figuras de largura fixa */
+.medida-valor, .intro-numeros dd, .resumo-grade dd, .perfil-escala {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+.seta { color: var(--pedra); font-style: normal; }
+
+/* ============================================================
+   Abertura — cartaz de viagem
+   ============================================================ */
+
+#intro {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: var(--e5) var(--e4);
+  background:
+    radial-gradient(120% 90% at 50% 8%, #2b3b4c 0%, var(--noite) 48%, var(--abismo) 100%);
+  transition: opacity 640ms ease, visibility 640ms;
+}
+
+#intro.saindo { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.intro-moldura {
+  width: min(680px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  text-align: left;
+  padding: clamp(1.5rem, 4vw, 3rem) clamp(1.25rem, 4vw, 3.25rem);
+  border-top: 1px solid var(--fio-forte);
+  border-bottom: 1px solid var(--fio-forte);
+  animation: subir 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes subir {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.intro-sobretitulo { margin-bottom: var(--e4); color: var(--pedra); }
+
+.intro-titulo {
+  font-family: var(--display);
+  font-weight: 400;
+  line-height: 0.84;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--areia);
+}
+
+.intro-alta {
+  font-size: clamp(3.2rem, 13vw, 7rem);
+  letter-spacing: 0.02em;
+}
+
+.intro-via {
+  font-size: clamp(3.2rem, 13vw, 7rem);
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.22em;
+}
+
+/* o algarismo recebe o acento quente — único ponto de brasa no cartaz */
+.intro-via em {
+  font-style: normal;
+  color: var(--brasa);
+  font-size: 1.04em;
+}
+
+.regua-dupla {
+  margin: var(--e4) 0 var(--e3);
+  height: 4px;
+  border-top: 1px solid var(--fio-forte);
+  border-bottom: 1px solid var(--fio-forte);
+}
+
+.intro-linha {
+  margin: 0 0 var(--e5);
+  font-size: clamp(0.95rem, 2vw, 1.1rem);
+  color: var(--tinta-meia);
+}
+.intro-linha .seta { margin: 0 0.4em; }
+
+.intro-numeros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e5);
+  margin: 0 0 var(--e5);
+}
+.intro-numeros div { display: flex; flex-direction: column; gap: var(--e1); }
+.intro-numeros dd {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2.1rem);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--tinta);
+}
+.intro-numeros dd i { font-style: normal; font-size: 0.5em; color: var(--tinta-fraca); margin-left: 0.2em; }
+
+.botao-partida {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85em;
+  padding: 0.9em 1.9em 0.9em 1.5em;
+  background: var(--areia);
+  color: var(--noite);
+  border: none;
+  border-radius: var(--curva);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--transicao), transform var(--transicao);
+}
+.botao-partida:hover { background: var(--brasa); transform: translateY(-2px); }
+.botao-partida:active { transform: none; }
+
+.botao-partida-icone {
+  width: 0; height: 0;
+  border-left: 11px solid currentColor;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+}
+
+.aviso {
+  margin: var(--e4) 0 0;
+  padding: var(--e3);
+  border-left: 2px solid var(--brasa);
+  background: color-mix(in oklab, var(--brasa) 10%, transparent);
+  color: var(--tinta-meia);
+  font-size: 0.875rem;
+}
+
+/* ============================================================
+   Estrutura — paisagem: painel à esquerda, palco à direita
+   ============================================================ */
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: var(--painel-larg) 1fr;
+  grid-template-rows: 1fr auto;
+  grid-template-areas: "painel palco" "transporte transporte";
+  opacity: 0;
+  transition: opacity 760ms ease 180ms;
+}
+#app.ativo { opacity: 1; }
+
+#painel {
+  grid-area: painel;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--noite);
+  border-right: 1px solid var(--fio);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#palco { grid-area: palco; position: relative; min-width: 0; }
+#mapa  { position: absolute; inset: 0; background: var(--abismo); }
+
+/* o MapLibre ganha o tom da casa */
+.maplibregl-ctrl-attrib {
+  background: color-mix(in oklab, var(--abismo) 86%, transparent) !important;
+  font-family: var(--texto); font-size: 10px;
+}
+.maplibregl-ctrl-attrib a { color: var(--tinta-fraca) !important; }
+.maplibregl-ctrl-group { background: var(--ardosia) !important; border: 1px solid var(--fio) !important; }
+.maplibregl-ctrl-group button + button { border-top: 1px solid var(--fio) !important; }
+
+/* ── cabeçalho do painel ─────────────────────────────────── */
+.painel-topo {
+  padding: var(--e4) var(--e4) var(--e3);
+  border-bottom: 1px solid var(--fio);
+}
+.marca {
+  font-family: var(--display);
+  font-size: 1.6rem;
+  line-height: 1;
+  margin: 0;
+  color: var(--areia);
+  letter-spacing: 0.03em;
+}
+.marca em { font-style: normal; color: var(--brasa); }
+.marca-sub {
+  margin: 0.35em 0 0;
+  font-size: 0.6875rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--tinta-fraca);
+}
+
+/* ── etapa em curso ──────────────────────────────────────── */
+.etapa {
+  padding: var(--e4);
+  border-bottom: 1px solid var(--fio);
+  border-left: 3px solid var(--cor-dia, var(--pedra));
+  transition: border-color var(--transicao);
+}
+.etapa-rotulo { display: flex; justify-content: space-between; gap: var(--e2); }
+.etapa-data { color: var(--tinta-fraca); letter-spacing: 0.08em; }
+
+.etapa-nome {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(1.15rem, 2.2vw, 1.45rem);
+  line-height: 1.16;
+  margin: var(--e2) 0 0;
+  color: var(--tinta);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1em;
+}
+.etapa-nome .seta { font-size: 0.72em; color: var(--cor-dia, var(--pedra)); }
+
+/* ── instrumentos ────────────────────────────────────────── */
+.instrumentos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--fio);
+  border-bottom: 1px solid var(--fio);
+}
+.medida {
+  background: var(--noite);
+  padding: var(--e3) var(--e4);
+  min-width: 0;
+}
+.medida-larga { grid-column: 1 / -1; }
+
+.medida-valor {
+  margin: 0.3em 0 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.05;
+  color: var(--tinta);
+  white-space: nowrap;
+}
+.medida-valor i {
+  font-style: normal;
+  font-size: 0.56em;
+  font-weight: 500;
+  color: var(--tinta-fraca);
+  margin-left: 0.22em;
+}
+.medida-de { font-size: 0.6rem; color: var(--tinta-fraca); letter-spacing: 0.06em; }
+
+/* altitude e frequência são as duas leituras que o olho procura */
+.medida-destaque .medida-valor { font-size: clamp(1.9rem, 3.4vw, 2.5rem); }
+.medida-destaque .medida-valor span { color: var(--areia); }
+.medida-fc .medida-valor span { color: var(--brasa); }
+
+/* o ponto pulsa junto com a frequência lida */
+.medida-fc .medida-rotulo::after {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  margin-left: 0.6em;
+  border-radius: 50%;
+  background: var(--brasa);
+  animation: pulso var(--periodo-fc, 1s) ease-out infinite;
+}
+@keyframes pulso {
+  0%   { transform: scale(1);   opacity: 1; }
+  28%  { transform: scale(1.5); opacity: 0.65; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+/* ── perfil de elevação ──────────────────────────────────── */
+.perfil { padding: var(--e4); margin-top: auto; }
+#perfil-svg {
+  display: block;
+  width: 100%;
+  height: clamp(72px, 11vh, 110px);
+  overflow: visible;
+}
+#perfil-area   { fill: color-mix(in oklab, var(--cor-dia, var(--pedra)) 20%, transparent); }
+#perfil-linha  { fill: none; stroke: var(--cor-dia, var(--pedra)); stroke-width: 1.25; vector-effect: non-scaling-stroke; }
+#perfil-cursor { stroke: var(--tinta); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.85; }
+
+.perfil-escala {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--e2);
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  color: var(--tinta-fraca);
+}
+
+/* ============================================================
+   Sobreposições no palco — resumo e mídia
+   ============================================================ */
+
+.resumo {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: min(500px, calc(100% - 2 * var(--e4)));
+  padding: var(--e5) var(--e5) var(--e4);
+  background: color-mix(in oklab, var(--noite) 94%, transparent);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--fio-forte);
+  border-top: 3px solid var(--cor-dia, var(--areia));
+  border-radius: var(--curva);
+  animation: resumo-entra 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes resumo-entra {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.resumo-destino {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(1.5rem, 3.4vw, 2rem);
+  line-height: 1.08;
+  margin: var(--e2) 0 var(--e4);
+  color: var(--areia);
+}
+
+.resumo-grade {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--e4) var(--e3);
+  margin: 0 0 var(--e5);
+  padding-top: var(--e4);
+  border-top: 1px solid var(--fio);
+}
+.resumo-grade div { display: flex; flex-direction: column; gap: var(--e1); min-width: 0; }
+.resumo-grade dd {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--tinta);
+  white-space: nowrap;
+}
+.resumo-grade dd i { font-style: normal; font-size: 0.6em; font-weight: 500; color: var(--tinta-fraca); margin-left: 0.15em; }
+
+.botao-seguir {
+  width: 100%;
+  padding: 0.85em 1.2em;
+  background: transparent;
+  color: var(--areia);
+  border: 1px solid var(--areia);
+  border-radius: var(--curva);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--transicao), color var(--transicao);
+}
+.botao-seguir:hover { background: var(--areia); color: var(--noite); }
+
+/* ── painel de mídia ─────────────────────────────────────── */
+.midia {
+  position: absolute;
+  z-index: 12;
+  right: var(--e4);
+  top: var(--e4);
+  /* a altura acompanha a mídia em vez de esticar: fotos deitadas não
+     deixam um vão escuro embaixo */
+  max-height: calc(100% - 2 * var(--e4));
+  width: min(38vw, 440px);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in oklab, var(--noite) 95%, transparent);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--fio-forte);
+  border-radius: var(--curva);
+  overflow: hidden;
+  animation: midia-entra 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes midia-entra {
+  from { opacity: 0; transform: translateX(26px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.midia-quadro {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  background: var(--abismo);
+  padding: var(--e2);
+}
+#midia-conteudo { display: contents; }
+.midia-quadro img, .midia-quadro video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.midia-fechar {
+  position: absolute;
+  z-index: 2;
+  top: var(--e2);
+  right: var(--e2);
+  width: 34px; height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  line-height: 1;
+  background: color-mix(in oklab, var(--abismo) 78%, transparent);
+  color: var(--tinta);
+  border: 1px solid var(--fio);
+  border-radius: var(--curva);
+  cursor: pointer;
+  transition: background var(--transicao), color var(--transicao);
+}
+.midia-fechar:hover { background: var(--brasa); color: var(--noite); border-color: var(--brasa); }
+
+.midia-legenda {
+  flex: none;
+  padding: var(--e3) var(--e4);
+  border-top: 1px solid var(--fio);
+  font-size: 0.8125rem;
+  color: var(--tinta-meia);
+  display: flex;
+  align-items: baseline;
+  gap: 0.75em;
+  font-variant-numeric: tabular-nums;
+}
+.midia-hora {
+  font-weight: 600;
+  color: var(--areia);
+  letter-spacing: 0.06em;
+  flex: none;
+}
+
+/* marcador de mídia sobre o mapa */
+.pino {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--brasa);
+  border: 2px solid var(--noite);
+  cursor: pointer;
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.pino:hover { transform: scale(1.45); }
+.pino.ativo { background: var(--areia); box-shadow: 0 0 0 6px color-mix(in oklab, var(--areia) 26%, transparent); }
+
+/* etiqueta de refúgio */
+.refugio {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-family: var(--display);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--tinta);
+  white-space: nowrap;
+  text-shadow: 0 1px 4px var(--abismo), 0 0 10px var(--abismo);
+  pointer-events: none;
+}
+.refugio::before {
+  content: "";
+  width: 9px; height: 9px;
+  flex: none;
+  background: var(--areia);
+  border: 1.5px solid var(--noite);
+  rotate: 45deg;
+}
+.refugio[data-tipo="fim"]::before { background: var(--brasa); }
+
+/* ============================================================
+   Barra de transporte
+   ============================================================ */
+
+#transporte {
+  grid-area: transporte;
+  display: flex;
+  align-items: center;
+  gap: var(--e4);
+  padding: var(--e3) var(--e4);
+  background: var(--noite);
+  border-top: 1px solid var(--fio);
+  padding-bottom: max(var(--e3), env(safe-area-inset-bottom));
+}
+
+.botao-tocar {
+  flex: none;
+  width: 46px; height: 46px;
+  display: grid;
+  place-items: center;
+  background: var(--areia);
+  color: var(--noite);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--transicao), transform 200ms var(--transicao);
+}
+.botao-tocar:hover { background: var(--brasa); transform: scale(1.06); }
+
+/* o ícone alterna entre duas barras e um triângulo */
+.icone-tocar { display: block; width: 14px; height: 15px; background: currentColor; }
+.icone-tocar[data-estado="tocando"] {
+  clip-path: polygon(0 0, 37% 0, 37% 100%, 0 100%, 0 0, 63% 0, 100% 0, 100% 100%, 63% 100%, 63% 0);
+}
+.icone-tocar[data-estado="pausado"] {
+  clip-path: polygon(8% 0, 100% 50%, 8% 100%);
+}
+
+/* ── linha do tempo: seis faixas proporcionais à duração ──── */
+.linha-tempo { position: relative; flex: 1; min-width: 0; height: 46px; }
+
+.linha-tempo-trilho {
+  position: absolute;
+  inset: 50% 0 auto;
+  translate: 0 -50%;
+  height: 100%;
+  display: flex;
+  gap: 2px;
+  align-items: stretch;
+}
+
+.faixa {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: 7px;
+  cursor: pointer;
+  border-bottom: 2px solid color-mix(in oklab, var(--cor) 32%, transparent);
+  transition: border-color var(--transicao);
+}
+.faixa:hover { border-bottom-color: color-mix(in oklab, var(--cor) 70%, transparent); }
+
+/* trecho já percorrido */
+.faixa-feito {
+  position: absolute;
+  left: 0; bottom: -2px;
+  height: 2px;
+  width: 0;
+  background: var(--cor);
+}
+.faixa.atual .faixa-rotulo { color: var(--cor); }
+
+.faixa-rotulo {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tinta-fraca);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--transicao);
+}
+
+/* marcas das mídias ao longo da faixa */
+.marca-midia {
+  position: absolute;
+  bottom: -2px;
+  width: 2px; height: 8px;
+  background: var(--tinta-meia);
+  translate: -1px 0;
+  pointer-events: none;
+}
+
+#scrub {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+/* ── controles à direita ─────────────────────────────────── */
+.controles { flex: none; display: flex; align-items: center; gap: var(--e4); }
+
+.interruptor { display: inline-flex; align-items: center; gap: 0.6em; cursor: pointer; }
+.interruptor input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+.interruptor-pista {
+  width: 38px; height: 21px;
+  flex: none;
+  padding: 2px;
+  background: var(--ardosia);
+  border: 1px solid var(--fio-forte);
+  border-radius: 999px;
+  transition: background var(--transicao), border-color var(--transicao);
+}
+.interruptor-pista i {
+  display: block;
+  width: 15px; height: 15px;
+  background: var(--tinta-fraca);
+  border-radius: 50%;
+  transition: translate var(--transicao), background var(--transicao);
+}
+.interruptor input:checked + .interruptor-pista { background: color-mix(in oklab, var(--brasa) 26%, var(--ardosia)); border-color: var(--brasa); }
+.interruptor input:checked + .interruptor-pista i { translate: 17px 0; background: var(--brasa); }
+.interruptor input:focus-visible + .interruptor-pista { outline: 2px solid var(--areia); outline-offset: 3px; }
+.interruptor input:checked ~ .interruptor-texto { color: var(--tinta-meia); }
+
+.velocidade { display: flex; border: 1px solid var(--fio-forte); border-radius: var(--curva); overflow: hidden; }
+.velocidade button {
+  padding: 0.45em 0.75em;
+  background: transparent;
+  color: var(--tinta-fraca);
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--transicao), color var(--transicao);
+}
+.velocidade button + button { border-left: 1px solid var(--fio); }
+.velocidade button:hover { color: var(--tinta); }
+.velocidade button.ativo { background: var(--areia); color: var(--noite); }
+
+/* ============================================================
+   Retrato — celular em pé e telas estreitas
+   ============================================================ */
+
+@media (orientation: portrait), (max-width: 760px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    grid-template-areas: "palco" "transporte" "painel";
+  }
+
+  #painel {
+    border-right: none;
+    border-top: 1px solid var(--fio);
+    max-height: 45vh;
+  }
+
+  .painel-topo { display: none; }   /* a marca já aparece na abertura */
+
+  .etapa { padding: var(--e3) var(--e4); }
+  .etapa-nome { flex-direction: row; flex-wrap: wrap; gap: 0.35em; align-items: baseline; }
+
+  .instrumentos { grid-template-columns: repeat(2, 1fr); }
+  .medida { padding: var(--e2) var(--e4) var(--e3); }
+  .medida-destaque .medida-valor { font-size: 1.85rem; }
+  .medida-valor { font-size: 1.1rem; }
+
+  .perfil { padding: var(--e3) var(--e4) var(--e4); }
+  #perfil-svg { height: 64px; }
+
+  /* a mídia sobe como folha a partir da base do mapa */
+  .midia {
+    right: var(--e2); left: var(--e2);
+    top: auto;
+    bottom: var(--e2);
+    width: auto;
+    max-height: min(72%, calc(100% - 2 * var(--e2)));
+    animation-name: folha-sobe;
+  }
+  @keyframes folha-sobe {
+    from { opacity: 0; transform: translateY(26px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .resumo { width: calc(100% - 2 * var(--e3)); padding: var(--e4); }
+  .resumo-grade { grid-template-columns: repeat(2, 1fr); gap: var(--e3) var(--e4); }
+
+  #transporte { flex-wrap: wrap; gap: var(--e3); padding-bottom: var(--e3); }
+  .linha-tempo { order: 3; flex-basis: 100%; height: 38px; }
+  .controles { margin-left: auto; }
+}
+
+/* celular deitado: pouca altura, então o painel encolhe */
+@media (orientation: landscape) and (max-height: 460px) {
+  :root { --painel-larg: 250px; }
+  .perfil { display: none; }
+  .medida-destaque .medida-valor { font-size: 1.5rem; }
+  .medida { padding: var(--e2) var(--e3); }
+  #transporte { padding-block: var(--e2); }
+  .botao-tocar { width: 38px; height: 38px; }
+}
+
+/* ============================================================
+   Preferências de acessibilidade
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .medida-fc .medida-rotulo::after { animation: none; }
+}
+
+/* ============================================================
+   Marcador do caminhante
+   ============================================================ */
+
+.caminhante {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--cor-dia, var(--areia));
+  border: 2.5px solid var(--abismo);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--cor-dia, var(--areia)) 55%, transparent);
+  pointer-events: none;
+}
+
+/* halo que respira, para o olho achar o ponto no relevo */
+.caminhante::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 1px solid var(--cor-dia, var(--areia));
+  opacity: 0;
+  animation: halo 2.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+@keyframes halo {
+  0%   { transform: scale(0.55); opacity: 0.75; }
+  70%  { transform: scale(1.6);  opacity: 0; }
+  100% { transform: scale(1.6);  opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caminhante::after { animation: none; }
+}
+
+/* os controles nativos do MapLibre precisam enxergar sobre o fundo escuro */
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(88%) sepia(12%) saturate(360%) hue-rotate(5deg) brightness(95%);
+}
+.maplibregl-ctrl-group button:hover { background: color-mix(in oklab, var(--areia) 18%, transparent) !important; }
+.maplibregl-ctrl-group button:not(:disabled):hover .maplibregl-ctrl-icon { filter: none; }
+
+/* ============================================================
+   Subida e descida
+   ============================================================ */
+
+/* as setas distinguem as duas leituras sem precisar reler o rótulo */
+.medida-sobe::before,
+.medida-desce::before {
+  font-size: 0.62em;
+  font-weight: 700;
+  margin-right: 0.22em;
+  vertical-align: 0.12em;
+}
+.medida-sobe::before  { content: "↑"; color: var(--areia); }
+.medida-desce::before { content: "↓"; color: var(--pedra); }
+
+/* o acumulado traz a referência do total numa segunda linha discreta */
+.medida-valor .medida-de { display: inline-block; margin-top: 0.15em; }
+
+/* ============================================================
+   Correções de retrato
+   ============================================================ */
+
+.faixa-n { font-weight: 700; }
+.faixa-n + .faixa-destino::before { content: ". "; }
+
+@media (orientation: portrait), (max-width: 760px) {
+  /* O card de etapa precisa se situar pela janela, e não pela área do
+     mapa: em pé o mapa é baixo e o card estourava para fora da tela. */
+  .resumo {
+    position: fixed;
+    inset: auto var(--e3) calc(var(--e3) + env(safe-area-inset-bottom)) var(--e3);
+    width: auto;
+    translate: none;
+    max-height: 78vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    animation-name: folha-sobe;
+  }
+  .resumo-destino { font-size: 1.6rem; margin-bottom: var(--e3); }
+  .resumo-grade { margin-bottom: var(--e4); padding-top: var(--e3); }
+}
+
+/* abaixo disto o nome do refúgio vira reticências; só o número serve melhor */
+@media (max-width: 580px) {
+  .faixa-destino { display: none; }
+  .faixa-rotulo { text-align: center; }
+  .linha-tempo { height: 30px; }
+}

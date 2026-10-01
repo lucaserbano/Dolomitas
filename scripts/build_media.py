@@ -1,0 +1,477 @@
+#!/usr/bin/env python3
+"""
+Ancora as fotos e videos de midias/ no trajeto e gera site/data/media.json.
+
+Cada arquivo e posicionado pelo horario em que foi capturado, cruzado com a
+serie temporal do dia correspondente — mais confiavel que o GPS da propria
+foto, que falha entre paredes de rocha. O GPS do arquivo serve de conferencia.
+
+Roda sem erro com a pasta vazia: o site funciona sem midias e este script
+pode ser executado de novo a cada lote que chegar.
+
+Uso:  python3 scripts/build_media.py [--fuso +02:00] [--forcar]
+                                    [--crf 26] [--altura 1080]
+"""
+
+import json
+import math
+import os
+import re
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timedelta, timezone
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIR_MIDIAS = os.path.join(RAIZ, "midias")
+DIR_DADOS = os.path.join(RAIZ, "site", "data")
+DIR_SAIDA = os.path.join(RAIZ, "site", "media")
+
+EXT_FOTO = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".tif", ".tiff", ".webp"}
+EXT_VIDEO = {".mov", ".mp4", ".m4v", ".avi"}
+
+LARGURA_MAX = 2000
+LARGURA_MINIATURA = 480
+ALTURA_MAX_VIDEO = 1080
+QUALIDADE_FOTO = 80       # WebP: ~40% menor que JPEG na mesma qualidade visual
+QUALIDADE_MINIATURA = 74
+CRF_VIDEO = 26            # maior = menor arquivo; 26 e um bom meio-termo
+
+# O GitHub Pages recomenda ate 1 GB por site e bloqueia arquivos acima de
+# 100 MB. Avisamos bem antes de chegar la.
+LIMITE_ARQUIVO_MB = 60
+LIMITE_TOTAL_MB = 700
+
+# As fotos foram feitas nos Dolomitas em setembro: horario de verao da Europa
+# Central. Usado so quando o arquivo nao declara o proprio fuso.
+FUSO_PADRAO = timezone(timedelta(hours=2))
+
+
+# ------------------------------------------------------------- metadados
+
+def _rodar(cmd):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        return r.stdout if r.returncode == 0 else ""
+    except (subprocess.SubprocessError, OSError):
+        return ""
+
+
+def _graus(valor, ref):
+    """Converte coordenada EXIF (grau, minuto, segundo) em decimal."""
+    try:
+        d = float(valor[0]) + float(valor[1]) / 60 + float(valor[2]) / 3600
+    except (TypeError, IndexError, ValueError, ZeroDivisionError):
+        return None
+    if ref in ("S", "W"):
+        d = -d
+    return d
+
+
+def meta_por_pillow(caminho):
+    """EXIF de imagens que a Pillow consegue abrir (JPEG, PNG, TIFF, WebP)."""
+    try:
+        from PIL import Image, ExifTags
+    except ImportError:
+        return None, None
+    try:
+        with Image.open(caminho) as img:
+            exif = img.getexif()
+            if not exif:
+                return None, None
+            tags = {ExifTags.TAGS.get(k, k): v for k, v in exif.items()}
+            bruto = exif.get_ifd(0x8769)
+            tags.update({ExifTags.TAGS.get(k, k): v for k, v in bruto.items()})
+
+            quando = None
+            texto = tags.get("DateTimeOriginal") or tags.get("DateTime")
+            if texto:
+                try:
+                    dt = datetime.strptime(str(texto).strip(), "%Y:%m:%d %H:%M:%S")
+                    desvio = tags.get("OffsetTimeOriginal") or tags.get("OffsetTime")
+                    if desvio:
+                        h, m = str(desvio).strip().replace("+", "").split(":")
+                        sinal = -1 if str(desvio).strip().startswith("-") else 1
+                        dt = dt.replace(tzinfo=timezone(
+                            sinal * timedelta(hours=abs(int(h)), minutes=int(m))))
+                    quando = dt
+                except ValueError:
+                    pass
+
+            local = None
+            gps = exif.get_ifd(0x8825)
+            if gps:
+                g = {ExifTags.GPSTAGS.get(k, k): v for k, v in gps.items()}
+                lat = _graus(g.get("GPSLatitude"), g.get("GPSLatitudeRef"))
+                lon = _graus(g.get("GPSLongitude"), g.get("GPSLongitudeRef"))
+                if lat is not None and lon is not None:
+                    local = (lat, lon)
+            return quando, local
+    except Exception:
+        return None, None
+
+
+def meta_por_mdls(caminho):
+    """Metadados do Spotlight — cobre HEIC, que a Pillow nao le sem plugin."""
+    saida = _rodar(["mdls", "-name", "kMDItemContentCreationDate",
+                    "-name", "kMDItemLatitude", "-name", "kMDItemLongitude",
+                    caminho])
+    if not saida:
+        return None, None
+    quando = local = None
+    lat = lon = None
+    for linha in saida.splitlines():
+        if "=" not in linha:
+            continue
+        chave, _, valor = linha.partition("=")
+        chave, valor = chave.strip(), valor.strip()
+        if valor in ("(null)", ""):
+            continue
+        if chave == "kMDItemContentCreationDate":
+            try:
+                quando = datetime.strptime(valor, "%Y-%m-%d %H:%M:%S %z")
+            except ValueError:
+                pass
+        elif chave == "kMDItemLatitude":
+            try:
+                lat = float(valor)
+            except ValueError:
+                pass
+        elif chave == "kMDItemLongitude":
+            try:
+                lon = float(valor)
+            except ValueError:
+                pass
+    if lat is not None and lon is not None:
+        local = (lat, lon)
+    return quando, local
+
+
+def meta_por_ffprobe(caminho):
+    """creation_time e localizacao ISO6179 dos videos do iPhone."""
+    saida = _rodar(["ffprobe", "-v", "quiet", "-print_format", "json",
+                    "-show_format", "-show_streams", caminho])
+    if not saida:
+        return None, None
+    try:
+        dados = json.loads(saida)
+    except json.JSONDecodeError:
+        return None, None
+
+    tags = dict(dados.get("format", {}).get("tags", {}))
+    for fluxo in dados.get("streams", []):
+        for k, v in (fluxo.get("tags") or {}).items():
+            tags.setdefault(k, v)
+
+    quando = None
+    for chave in ("creation_time", "com.apple.quicktime.creationdate"):
+        if chave in tags:
+            texto = str(tags[chave]).strip().replace("Z", "+00:00")
+            try:
+                quando = datetime.fromisoformat(texto)
+                break
+            except ValueError:
+                continue
+
+    local = None
+    for chave in ("com.apple.quicktime.location.ISO6709", "location"):
+        if chave in tags:
+            m = re.match(r"([+-]\d+\.?\d*)([+-]\d+\.?\d*)", str(tags[chave]))
+            if m:
+                local = (float(m.group(1)), float(m.group(2)))
+                break
+    return quando, local
+
+
+def ler_metadados(caminho, ehvideo):
+    """Tenta cada fonte de metadados em ordem ate obter um horario."""
+    tentativas = ([meta_por_ffprobe, meta_por_mdls] if ehvideo
+                  else [meta_por_pillow, meta_por_mdls, meta_por_ffprobe])
+    quando = local = None
+    for fn in tentativas:
+        q, l = fn(caminho)
+        if quando is None and q is not None:
+            quando = q
+        if local is None and l is not None:
+            local = l
+        if quando is not None and local is not None:
+            break
+    return quando, local
+
+
+# ------------------------------------------------------------ conversao
+
+def gerar_foto(origem, destino, largura, qualidade):
+    """Redimensiona e grava em WebP.
+
+    A Pillow nao abre HEIC sem plugin, entao nesses casos usamos o sips, que
+    ja vem no macOS e tambem escreve WebP.
+    """
+    if os.path.exists(destino):
+        return True
+    ext = os.path.splitext(origem)[1].lower()
+
+    if ext in (".heic", ".heif"):
+        _rodar(["sips", "-s", "format", "webp",
+                "-s", "formatOptions", str(qualidade),
+                "-Z", str(largura), origem, "--out", destino])
+        return os.path.exists(destino)
+
+    try:
+        from PIL import Image, ImageOps
+        with Image.open(origem) as img:
+            img = ImageOps.exif_transpose(img)
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            if img.width > largura:
+                img = img.resize(
+                    (largura, round(img.height * largura / img.width)),
+                    Image.LANCZOS)
+            img.save(destino, "WEBP", quality=qualidade, method=6)
+        return True
+    except Exception as erro:
+        print(f"    ! falha ao converter {os.path.basename(origem)}: {erro}")
+        return False
+
+
+def gerar_video(origem, destino, poster):
+    """Transcodifica para MP4 h264 pronto para streaming progressivo."""
+    if not os.path.exists(destino):
+        r = subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error", "-i", origem,
+            "-vf", f"scale='min(iw,trunc(ih*16/9/2)*2)':'min({ALTURA_MAX_VIDEO},ih)'"
+                   f":force_original_aspect_ratio=decrease:force_divisible_by=2",
+            "-c:v", "libx264", "-preset", "slow", "-crf", str(CRF_VIDEO),
+            "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+            "-c:a", "aac", "-b:a", "128k", destino,
+        ], capture_output=True, text=True)
+        if r.returncode != 0:
+            print(f"    ! ffmpeg falhou em {os.path.basename(origem)}: "
+                  f"{r.stderr.strip()[:200]}")
+            return False
+    if not os.path.exists(poster):
+        _rodar(["ffmpeg", "-y", "-loglevel", "error", "-i", destino,
+                "-vf", f"scale={LARGURA_MINIATURA}:-2", "-frames:v", "1",
+                "-q:v", "75", poster])
+    return os.path.exists(destino)
+
+
+# ------------------------------------------------------------- ancoragem
+
+def localizar_no_trajeto(dias, epoch):
+    """Encontra o dia e o indice imediatamente anterior ao instante dado."""
+    for dia in dias:
+        t0 = dia["resumo"]["inicioUTC"]
+        rel = epoch - t0
+        if rel < -300 or rel > dia["t"][-1] + 300:
+            continue
+        rel = max(0.0, min(rel, dia["t"][-1]))
+        ts = dia["t"]
+        lo, hi = 0, len(ts) - 1
+        while hi - lo > 1:
+            meio = (lo + hi) // 2
+            if ts[meio] <= rel:
+                lo = meio
+            else:
+                hi = meio
+        intervalo = ts[hi] - ts[lo]
+        f = (rel - ts[lo]) / intervalo if intervalo > 0 else 0.0
+        mistura = lambda c: c[lo] + f * (c[hi] - c[lo])
+        return dia, rel, {
+            "lon": round(mistura(dia["lon"]), 6),
+            "lat": round(mistura(dia["lat"]), 6),
+            "ele": round(mistura(dia["ele"])),
+            "dist": round(mistura(dia["dist"])),
+            "gain": round(mistura(dia["gain"])),
+        }
+    return None, None, None
+
+
+def formatar_duracao(segundos):
+    h, resto = divmod(int(segundos), 3600)
+    m = resto // 60
+    return f"{h}h{m:02d}" if h else f"{m} min"
+
+
+def montar_legenda(rel, estado):
+    """Tempo de atividade + ganho de elevacao + distancia no dia."""
+    km = f"{estado['dist'] / 1000:.1f}".replace(".", ",")   # separador pt-BR
+    return (f"{formatar_duracao(rel)} de caminhada  ·  "
+            f"+{estado['gain']} m  ·  "
+            f"{km} km no dia")
+
+
+# ------------------------------------------------------------------- peso
+
+def relatar_peso(itens):
+    """Mostra quanto a pasta publicada vai pesar e alerta sobre o GitHub Pages.
+
+    O Pages recomenda ate 1 GB por site e o GitHub recusa qualquer arquivo
+    acima de 100 MB, entao convem saber disso antes do primeiro push.
+    """
+    def tamanho(rel):
+        caminho = os.path.join(RAIZ, "site", rel)
+        return os.path.getsize(caminho) if os.path.exists(caminho) else 0
+
+    fotos = [i for i in itens if i["tipo"] == "foto"]
+    videos = [i for i in itens if i["tipo"] == "video"]
+    peso_fotos = sum(tamanho(i["src"]) + tamanho(i["thumb"]) for i in fotos)
+    peso_videos = sum(tamanho(i["src"]) + tamanho(i["thumb"]) for i in videos)
+    total = peso_fotos + peso_videos
+
+    print("\nPeso dos arquivos publicados:")
+    if fotos:
+        print(f"  {len(fotos):3d} fotos   {peso_fotos / 1e6:7.1f} MB"
+              f"   (media {peso_fotos / len(fotos) / 1e6:.2f} MB)")
+    if videos:
+        print(f"  {len(videos):3d} videos  {peso_videos / 1e6:7.1f} MB"
+              f"   (media {peso_videos / len(videos) / 1e6:.2f} MB)")
+    print(f"  {'total':>7}    {total / 1e6:7.1f} MB")
+
+    grandes = [(i, tamanho(i["src"])) for i in itens
+               if tamanho(i["src"]) > LIMITE_ARQUIVO_MB * 1e6]
+    if grandes:
+        print(f"\n  ATENCAO: {len(grandes)} arquivo(s) acima de {LIMITE_ARQUIVO_MB} MB.")
+        for i, t in sorted(grandes, key=lambda g: -g[1])[:5]:
+            print(f"    {t / 1e6:6.1f} MB  {i['original']}")
+        print("    O GitHub recusa arquivos acima de 100 MB. Para encolher,")
+        print("    rode de novo com --crf 30 ou --altura 720.")
+
+    if total > LIMITE_TOTAL_MB * 1e6:
+        print(f"\n  ATENCAO: o total passou de {LIMITE_TOTAL_MB} MB.")
+        print("    O GitHub Pages recomenda no maximo 1 GB por site.")
+        print("    Considere --crf 30, --altura 720, ou hospedar os videos fora.")
+
+
+# ---------------------------------------------------------------- principal
+
+def main():
+    global CRF_VIDEO, ALTURA_MAX_VIDEO
+    args = sys.argv[1:]
+    forcar = "--forcar" in args
+    if "--crf" in args:
+        CRF_VIDEO = int(args[args.index("--crf") + 1])
+    if "--altura" in args:
+        ALTURA_MAX_VIDEO = int(args[args.index("--altura") + 1])
+    fuso = FUSO_PADRAO
+    if "--fuso" in args:
+        try:
+            texto = args[args.index("--fuso") + 1]
+            sinal = -1 if texto.startswith("-") else 1
+            h, _, m = texto.lstrip("+-").partition(":")
+            fuso = timezone(sinal * timedelta(hours=int(h), minutes=int(m or 0)))
+        except (IndexError, ValueError):
+            raise SystemExit("--fuso espera algo como +02:00")
+
+    caminho_dias = os.path.join(DIR_DADOS, "days.json")
+    if not os.path.exists(caminho_dias):
+        raise SystemExit("Rode scripts/build_trail.py primeiro.")
+    with open(caminho_dias, encoding="utf-8") as fh:
+        dias = json.load(fh)["dias"]
+
+    os.makedirs(DIR_MIDIAS, exist_ok=True)
+    os.makedirs(DIR_SAIDA, exist_ok=True)
+    if forcar and os.path.isdir(DIR_SAIDA):
+        shutil.rmtree(DIR_SAIDA)
+        os.makedirs(DIR_SAIDA)
+
+    arquivos = []
+    for pasta, _, nomes in os.walk(DIR_MIDIAS):
+        for nome in sorted(nomes):
+            if nome.startswith("."):
+                continue
+            ext = os.path.splitext(nome)[1].lower()
+            if ext in EXT_FOTO or ext in EXT_VIDEO:
+                arquivos.append(os.path.join(pasta, nome))
+
+    if not arquivos:
+        with open(os.path.join(DIR_DADOS, "media.json"), "w", encoding="utf-8") as fh:
+            json.dump({"midias": []}, fh, ensure_ascii=False, indent=2)
+        print("Nenhuma midia em midias/ — media.json vazio gerado.")
+        print("O site funciona normalmente; rode este script de novo quando")
+        print("colocar as fotos e videos na pasta.")
+        return
+
+    print(f"Encontradas {len(arquivos)} midias.\n")
+    itens, sem_ancora = [], []
+
+    for caminho in arquivos:
+        nome = os.path.basename(caminho)
+        ext = os.path.splitext(nome)[1].lower()
+        ehvideo = ext in EXT_VIDEO
+
+        quando, local = ler_metadados(caminho, ehvideo)
+        if quando is None:
+            sem_ancora.append((nome, "sem data de captura"))
+            continue
+        if quando.tzinfo is None:
+            quando = quando.replace(tzinfo=fuso)
+
+        dia, rel, estado = localizar_no_trajeto(dias, quando.timestamp())
+        if dia is None:
+            sem_ancora.append((nome, f"fora do periodo ({quando:%d/%m %H:%M})"))
+            continue
+
+        base = f"d{dia['n']}_{int(rel):06d}_{re.sub(r'[^a-zA-Z0-9]+', '', os.path.splitext(nome)[0])[:24]}"
+        if ehvideo:
+            arq = f"{base}.mp4"
+            thumb = f"{base}_thumb.webp"
+            if not gerar_video(caminho, os.path.join(DIR_SAIDA, arq),
+                               os.path.join(DIR_SAIDA, thumb)):
+                sem_ancora.append((nome, "falha na conversao do video"))
+                continue
+        else:
+            arq = f"{base}.webp"
+            thumb = f"{base}_thumb.webp"
+            if not gerar_foto(caminho, os.path.join(DIR_SAIDA, arq),
+                              LARGURA_MAX, QUALIDADE_FOTO):
+                sem_ancora.append((nome, "falha na conversao da foto"))
+                continue
+            gerar_foto(caminho, os.path.join(DIR_SAIDA, thumb),
+                       LARGURA_MINIATURA, QUALIDADE_MINIATURA)
+
+        # Distancia entre o GPS do arquivo e o ponto do trajeto, quando houver.
+        desvio = None
+        if local:
+            desvio = round(math.hypot(
+                (local[0] - estado["lat"]) * 110540,
+                (local[1] - estado["lon"]) * 76000))
+
+        itens.append({
+            "id": base,
+            "dia": dia["n"],
+            "t": round(rel, 1),
+            "tipo": "video" if ehvideo else "foto",
+            "src": f"media/{arq}",
+            "thumb": f"media/{thumb}",
+            "lon": estado["lon"], "lat": estado["lat"], "ele": estado["ele"],
+            "dist": estado["dist"], "gain": estado["gain"],
+            "legenda": montar_legenda(rel, estado),
+            "hora": quando.astimezone(fuso).strftime("%H:%M"),
+            "desvioGps": desvio,
+            "original": nome,
+        })
+        print(f"  dia {dia['n']}  {formatar_duracao(rel):>7}  {nome}")
+
+    itens.sort(key=lambda m: (m["dia"], m["t"]))
+    with open(os.path.join(DIR_DADOS, "media.json"), "w", encoding="utf-8") as fh:
+        json.dump({"midias": itens}, fh, ensure_ascii=False, indent=2)
+
+    print(f"\n{len(itens)} midias ancoradas no trajeto.")
+    relatar_peso(itens)
+    distantes = [m for m in itens if m["desvioGps"] and m["desvioGps"] > 150]
+    if distantes:
+        print(f"\n{len(distantes)} com GPS proprio distante do trajeto "
+              f"(conferir se o horario bate):")
+        for m in distantes[:10]:
+            print(f"  {m['original']}: {m['desvioGps']} m")
+    if sem_ancora:
+        print(f"\n{len(sem_ancora)} nao ancoradas:")
+        for nome, motivo in sem_ancora:
+            print(f"  {nome}: {motivo}")
+        print("\nSe forem fotos editadas, exporte de novo pelo app Fotos usando")
+        print("'Exportar Original Nao Modificado' para preservar os metadados.")
+
+
+if __name__ == "__main__":
+    main()

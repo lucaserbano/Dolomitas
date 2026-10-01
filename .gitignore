@@ -1,0 +1,22 @@
+# ── Dados brutos do Apple Health ───────────────────────────────────
+# export.xml tem 329 MB. O GitHub recusa qualquer arquivo acima de
+# 100 MB, entao ele nunca pode ser versionado. Os GPX ficam (sao
+# pequenos e permitem refazer o processamento).
+relogio/export.xml
+relogio/export_cda.xml
+relogio/electrocardiograms/
+site/data/.health_cache.json
+
+# ── Midias originais ───────────────────────────────────────────────
+# As fotos e videos que saem do iPhone sao enormes (HEIC de 3-5 MB,
+# video 4K de centenas de MB). Apenas os derivados otimizados em
+# site/media/ vao para o repositorio.
+midias/
+
+# ── Sistema e ferramentas ──────────────────────────────────────────
+.DS_Store
+._*
+node_modules/
+*.log
+__pycache__/
+*.pyc
