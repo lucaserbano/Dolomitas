@@ -19,7 +19,7 @@ Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 ## Rodar na sua máquina
 
 ```bash
-cd site
+cd docs
 python3 -m http.server 8777
 ```
 
@@ -66,13 +66,14 @@ Saúde se precisar.
 
 ## Publicar
 
-O repositório já traz `.github/workflows/pages.yml`, que publica a pasta
-`site/` a cada push na `main`. Para ligar, uma única vez:
+O site mora em `docs/`, que é uma das pastas que o GitHub Pages publica
+direto. Para ligar, uma única vez:
 
-**Settings → Pages → Source: GitHub Actions**
+**Settings → Pages → Source: Deploy from a branch → Branch: `main` / `/docs`
+→ Save**
 
-O workflow confere se `site/data/days.json` existe antes de publicar, para o
-site não ir ao ar sem dados.
+Daí em diante, todo push na `main` republica o site sozinho. Sem GitHub
+Actions, sem configuração extra, sem nada que possa quebrar.
 
 ### Sobre o peso dos arquivos
 
@@ -88,7 +89,7 @@ Esta é a parte que exige atenção. Os limites do GitHub:
 Três decisões já embutidas no projeto para caber nisso com folga:
 
 1. **As mídias originais nunca entram no repositório.** `midias/` está no
-   `.gitignore`. Só os derivados otimizados de `site/media/` são versionados.
+   `.gitignore`. Só os derivados otimizados de `docs/media/` são versionados.
    Isso importa porque o Git guarda todas as versões para sempre: um HEIC de
    5 MB commitado por engano pesa no clone de todo mundo, para sempre.
 
@@ -99,14 +100,40 @@ Três decisões já embutidas no projeto para caber nisso com folga:
    8 MB por minuto. O `build_media.py` imprime o total ao final e avisa se
    algum arquivo passar de 60 MB ou se o conjunto passar de 700 MB.
 
-**Se os vídeos estourarem o orçamento**, nesta ordem:
-
-- `--crf 30 --altura 720` costuma cortar o tamanho pela metade;
-- se ainda assim não couber, hospede os vídeos fora (YouTube não listado,
-  Cloudflare R2, Backblaze B2) e troque o `src` no `media.json`.
-
 > **Git LFS não resolve.** O GitHub Pages não baixa os objetos do LFS: ele
 > entrega o arquivo-ponteiro em texto, e o vídeo simplesmente não toca.
+
+### Vídeos fora do repositório
+
+Para bastante vídeo em alta qualidade, o caminho é tirá-los do Git. Diga uma
+vez onde eles vão morar:
+
+```bash
+python3 scripts/build_media.py --videos-em "https://seu-bucket.r2.dev/dolomitas"
+```
+
+A partir daí o script passa a:
+
+- converter os vídeos para `videos_para_subir/` em vez de `docs/media/`;
+- gerar o **poster** de cada vídeo em `docs/media/` (poucos KB, fica no Git,
+  e é o que aparece enquanto o vídeo carrega);
+- apontar o `src` do `media.json` para a sua URL.
+
+Depois é só subir o conteúdo de `videos_para_subir/` para o bucket. O
+endereço fica guardado em `scripts/config.json`; `--videos-aqui` desfaz e
+volta tudo para dentro do repositório.
+
+**Onde hospedar.** O [Cloudflare R2][r2] é a melhor opção para este caso:
+10 GB de armazenamento na camada gratuita e, o que mais importa aqui,
+**sem cobrança de banda de saída** — vídeo é justamente onde a banda pesa. O
+[Backblaze B2][b2] também serve. Em qualquer um deles, libere o CORS para o
+domínio do site, senão o navegador recusa o vídeo.
+
+Se um vídeo não carregar, o site mostra o poster com uma explicação em vez
+de um quadro preto.
+
+[r2]: https://developers.cloudflare.com/r2/
+[b2]: https://www.backblaze.com/cloud-storage
 
 ---
 
@@ -115,7 +142,7 @@ Três decisões já embutidas no projeto para caber nisso com folga:
 ```
 relogio/*.gpx + export.xml ──▶ scripts/build_trail.py ──▶ site/data/days.json
 midias/*                   ──▶ scripts/build_media.py ──▶ site/data/media.json
-                                                          site/media/*
+                                                          docs/media/*
 ```
 
 ### Tratamento dos dados
@@ -154,10 +181,11 @@ Dados de relevo: [Mapterhorn][mt] (sem necessidade de chave de API).
 ### Arquivos
 
 ```
-relogio/          GPX e export do Apple Health (fonte; não versionado)
-midias/           suas fotos e vídeos (não versionado)
+relogio/          GPX e export do Apple Health (fonte)
+midias/           suas fotos e vídeos originais (não versionado)
+videos_para_subir/  vídeos convertidos, prontos para o bucket (não versionado)
 scripts/          processamento em Python, sem dependências externas
-site/             o site publicado
+docs/             o site publicado — é esta pasta que o GitHub Pages serve
   ├── data/       JSON gerado
-  └── media/      fotos e vídeos otimizados
+  └── media/      fotos otimizadas
 ```

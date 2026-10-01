@@ -11,6 +11,7 @@ pode ser executado de novo a cada lote que chegar.
 
 Uso:  python3 scripts/build_media.py [--fuso +02:00] [--forcar]
                                     [--crf 26] [--altura 1080]
+                                    [--videos-em URL | --videos-aqui]
 """
 
 import json
@@ -24,8 +25,12 @@ from datetime import datetime, timedelta, timezone
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIR_MIDIAS = os.path.join(RAIZ, "midias")
-DIR_DADOS = os.path.join(RAIZ, "site", "data")
-DIR_SAIDA = os.path.join(RAIZ, "site", "media")
+DIR_DADOS = os.path.join(RAIZ, "docs", "data")
+DIR_SAIDA = os.path.join(RAIZ, "docs", "media")
+# Os videos podem morar fora do repositorio. Quando isso esta configurado,
+# eles sao convertidos para ca e esta pasta e que vai para o R2/B2.
+DIR_VIDEOS = os.path.join(RAIZ, "videos_para_subir")
+CONFIG = os.path.join(RAIZ, "scripts", "config.json")
 
 EXT_FOTO = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".tif", ".tiff", ".webp"}
 EXT_VIDEO = {".mov", ".mp4", ".m4v", ".avi"}
@@ -250,10 +255,34 @@ def gerar_video(origem, destino, poster):
                   f"{r.stderr.strip()[:200]}")
             return False
     if not os.path.exists(poster):
-        _rodar(["ffmpeg", "-y", "-loglevel", "error", "-i", destino,
-                "-vf", f"scale={LARGURA_MINIATURA}:-2", "-frames:v", "1",
-                "-q:v", "75", poster])
+        gerar_poster(destino, poster)
     return os.path.exists(destino)
+
+
+def gerar_poster(video, poster):
+    """Primeiro quadro do video como WebP.
+
+    Nem toda build do ffmpeg traz o encoder WebP (a do Homebrew nao traz),
+    entao extraimos um JPEG e convertemos com a Pillow.
+    """
+    temporario = poster + ".tmp.jpg"
+    _rodar(["ffmpeg", "-y", "-loglevel", "error", "-i", video,
+            "-vf", f"scale={LARGURA_MINIATURA}:-2", "-frames:v", "1",
+            "-q:v", "3", temporario])
+    if not os.path.exists(temporario):
+        return False
+    try:
+        from PIL import Image
+        with Image.open(temporario) as img:
+            img.convert("RGB").save(poster, "WEBP",
+                                    quality=QUALIDADE_MINIATURA, method=6)
+    except Exception:
+        shutil.move(temporario, poster)   # sem Pillow, fica o JPEG mesmo
+        return True
+    finally:
+        if os.path.exists(temporario):
+            os.remove(temporario)
+    return os.path.exists(poster)
 
 
 # ------------------------------------------------------------- ancoragem
@@ -301,16 +330,36 @@ def montar_legenda(rel, estado):
             f"{km} km no dia")
 
 
+# ------------------------------------------------- onde os videos vao morar
+
+def ler_config():
+    if os.path.exists(CONFIG):
+        try:
+            with open(CONFIG, encoding="utf-8") as fh:
+                return json.load(fh)
+        except json.JSONDecodeError:
+            pass
+    return {}
+
+
+def gravar_config(cfg):
+    with open(CONFIG, "w", encoding="utf-8") as fh:
+        json.dump(cfg, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+
+
 # ------------------------------------------------------------------- peso
 
-def relatar_peso(itens):
+def relatar_peso(itens, base_videos=None):
     """Mostra quanto a pasta publicada vai pesar e alerta sobre o GitHub Pages.
 
     O Pages recomenda ate 1 GB por site e o GitHub recusa qualquer arquivo
     acima de 100 MB, entao convem saber disso antes do primeiro push.
     """
     def tamanho(rel):
-        caminho = os.path.join(RAIZ, "site", rel)
+        caminho = (os.path.join(DIR_VIDEOS, rel.rsplit("/", 1)[-1])
+                   if rel.startswith("http")
+                   else os.path.join(RAIZ, "docs", rel))
         return os.path.getsize(caminho) if os.path.exists(caminho) else 0
 
     fotos = [i for i in itens if i["tipo"] == "foto"]
@@ -327,6 +376,13 @@ def relatar_peso(itens):
         print(f"  {len(videos):3d} videos  {peso_videos / 1e6:7.1f} MB"
               f"   (media {peso_videos / len(videos) / 1e6:.2f} MB)")
     print(f"  {'total':>7}    {total / 1e6:7.1f} MB")
+
+    if base_videos:
+        print(f"\n  Os videos NAO estao no repositorio.")
+        print(f"  Suba o conteudo de videos_para_subir/ para:")
+        print(f"    {base_videos}")
+        print(f"  Apenas as {len(fotos)} fotos ({peso_fotos / 1e6:.1f} MB) vao para o Git.")
+        return
 
     grandes = [(i, tamanho(i["src"])) for i in itens
                if tamanho(i["src"]) > LIMITE_ARQUIVO_MB * 1e6]
@@ -353,6 +409,15 @@ def main():
         CRF_VIDEO = int(args[args.index("--crf") + 1])
     if "--altura" in args:
         ALTURA_MAX_VIDEO = int(args[args.index("--altura") + 1])
+
+    cfg = ler_config()
+    if "--videos-em" in args:
+        cfg["baseVideos"] = args[args.index("--videos-em") + 1].rstrip("/")
+        gravar_config(cfg)
+    if "--videos-aqui" in args:
+        cfg.pop("baseVideos", None)
+        gravar_config(cfg)
+    base_videos = cfg.get("baseVideos")
     fuso = FUSO_PADRAO
     if "--fuso" in args:
         try:
@@ -371,6 +436,8 @@ def main():
 
     os.makedirs(DIR_MIDIAS, exist_ok=True)
     os.makedirs(DIR_SAIDA, exist_ok=True)
+    if base_videos:
+        os.makedirs(DIR_VIDEOS, exist_ok=True)
     if forcar and os.path.isdir(DIR_SAIDA):
         shutil.rmtree(DIR_SAIDA)
         os.makedirs(DIR_SAIDA)
@@ -416,7 +483,11 @@ def main():
         if ehvideo:
             arq = f"{base}.mp4"
             thumb = f"{base}_thumb.webp"
-            if not gerar_video(caminho, os.path.join(DIR_SAIDA, arq),
+            # O poster fica sempre no repositorio: e pequeno e permite que o
+            # site mostre o quadro antes de buscar o video la fora.
+            destino_video = os.path.join(
+                DIR_VIDEOS if base_videos else DIR_SAIDA, arq)
+            if not gerar_video(caminho, destino_video,
                                os.path.join(DIR_SAIDA, thumb)):
                 sem_ancora.append((nome, "falha na conversao do video"))
                 continue
@@ -442,7 +513,8 @@ def main():
             "dia": dia["n"],
             "t": round(rel, 1),
             "tipo": "video" if ehvideo else "foto",
-            "src": f"media/{arq}",
+            "src": (f"{base_videos}/{arq}" if (ehvideo and base_videos)
+                    else f"media/{arq}"),
             "thumb": f"media/{thumb}",
             "lon": estado["lon"], "lat": estado["lat"], "ele": estado["ele"],
             "dist": estado["dist"], "gain": estado["gain"],
@@ -458,7 +530,7 @@ def main():
         json.dump({"midias": itens}, fh, ensure_ascii=False, indent=2)
 
     print(f"\n{len(itens)} midias ancoradas no trajeto.")
-    relatar_peso(itens)
+    relatar_peso(itens, base_videos)
     distantes = [m for m in itens if m["desvioGps"] and m["desvioGps"] > 150]
     if distantes:
         print(f"\n{len(distantes)} com GPS proprio distante do trajeto "

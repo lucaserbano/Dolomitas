@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIR_RELOGIO = os.path.join(RAIZ, "relogio")
-DIR_DADOS = os.path.join(RAIZ, "site", "data")
+DIR_DADOS = os.path.join(RAIZ, "docs", "data")
 CACHE_SAUDE = os.path.join(DIR_DADOS, ".health_cache.json")
 
 # Trechos percorridos, na ordem. Os nomes vieram do cruzamento das coordenadas

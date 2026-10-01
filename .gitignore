@@ -5,7 +5,7 @@
 relogio/export.xml
 relogio/export_cda.xml
 relogio/electrocardiograms/
-site/data/.health_cache.json
+docs/data/.health_cache.json
 
 # ── Midias originais ───────────────────────────────────────────────
 # As fotos e videos que saem do iPhone sao enormes (HEIC de 3-5 MB,
@@ -20,3 +20,7 @@ node_modules/
 *.log
 __pycache__/
 *.pyc
+
+# ── Vídeos destinados à hospedagem externa (Cloudflare R2 / Backblaze B2) ──
+# São grandes demais para o repositório; sobem direto para o bucket.
+videos_para_subir/

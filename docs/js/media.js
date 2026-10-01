@@ -84,12 +84,16 @@ export class Galeria {
     if (m.tipo === "video") {
       const v = document.createElement("video");
       v.src = m.src;
-      v.poster = m.thumb;
+      v.poster = m.thumb;          // o quadro aparece antes do vídeo chegar
       v.loop = true;
       v.muted = true;
       v.autoplay = true;
       v.playsInline = true;
+      v.preload = "metadata";
       v.setAttribute("playsinline", "");
+      // Vídeos podem estar hospedados fora; se faltarem, o poster continua
+      // valendo e o motivo fica explícito em vez de um quadro preto.
+      v.addEventListener("error", () => this.falhar(m), { once: true });
       v.play?.().catch(() => {});
       return v;
     }
@@ -97,7 +101,27 @@ export class Galeria {
     img.src = m.src;
     img.alt = `Foto feita após ${m.legenda}`;
     img.decoding = "async";
+    img.addEventListener("error", () => this.falhar(m), { once: true });
     return img;
+  }
+
+  /** Troca a mídia quebrada pelo poster e uma explicação curta. */
+  falhar(m) {
+    if (this.ativa?.id !== m.id) return;
+    const caixa = document.createElement("div");
+    caixa.className = "midia-ausente";
+    if (m.thumb) {
+      const prev = document.createElement("img");
+      prev.src = m.thumb;
+      prev.alt = "";
+      caixa.appendChild(prev);
+    }
+    const aviso = document.createElement("p");
+    aviso.textContent = m.src.startsWith("http")
+      ? "Este vídeo está hospedado fora do site e não pôde ser carregado."
+      : "Arquivo não encontrado.";
+    caixa.appendChild(aviso);
+    this.conteudo.replaceChildren(caixa);
   }
 
   fechar() {

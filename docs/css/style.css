@@ -765,14 +765,30 @@ button, input { font: inherit; color: inherit; }
   .controles { margin-left: auto; }
 }
 
-/* celular deitado: pouca altura, então o painel encolhe */
-@media (orientation: landscape) and (max-height: 460px) {
-  :root { --painel-larg: 250px; }
+/* Celular deitado: sobra largura e falta altura. Tudo encolhe para que as
+   oito leituras caibam sem corte — inclusive os rótulos, que numa coluna
+   estreita quebravam em duas linhas e empurravam os valores para fora. */
+@media (orientation: landscape) and (max-height: 520px) {
+  :root { --painel-larg: 268px; }
+
   .perfil { display: none; }
-  .medida-destaque .medida-valor { font-size: 1.5rem; }
-  .medida { padding: var(--e2) var(--e3); }
-  #transporte { padding-block: var(--e2); }
-  .botao-tocar { width: 38px; height: 38px; }
+  .marca-sub { display: none; }
+  .painel-topo { padding: var(--e2) var(--e3); }
+  .marca { font-size: 1.15rem; }
+
+  .etapa { padding: var(--e2) var(--e3); }
+  .etapa-nome { font-size: 0.95rem; }
+  .etapa-nome .seta { display: none; }
+  .etapa-nome > span:last-child::before { content: "→ "; color: var(--cor-dia, var(--pedra)); }
+
+  .medida { padding: 0.3rem var(--e3) 0.45rem; }
+  .medida-rotulo { font-size: 0.5625rem; letter-spacing: 0.1em; white-space: nowrap; }
+  .medida-valor { font-size: 0.95rem; }
+  .medida-destaque .medida-valor { font-size: 1.4rem; }
+
+  #transporte { padding-block: var(--e2); gap: var(--e3); }
+  .botao-tocar { width: 36px; height: 36px; }
+  .controles { gap: var(--e3); }
 }
 
 /* ============================================================
@@ -876,4 +892,20 @@ button, input { font: inherit; color: inherit; }
   .faixa-destino { display: none; }
   .faixa-rotulo { text-align: center; }
   .linha-tempo { height: 30px; }
+}
+
+/* mídia que não pôde ser carregada (vídeo externo fora do ar, por exemplo) */
+.midia-ausente {
+  display: grid;
+  gap: var(--e3);
+  justify-items: center;
+  padding: var(--e4);
+  text-align: center;
+}
+.midia-ausente img { max-width: 100%; opacity: 0.45; }
+.midia-ausente p {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 0.8125rem;
+  color: var(--tinta-fraca);
 }
