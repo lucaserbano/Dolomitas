@@ -21,7 +21,7 @@ Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 | Etapa | Fotos | Vídeos | No repositório | No bucket R2 |
 |-------|-------|--------|----------------|--------------|
 | 1 · Braies → Sennes | 88 | 38 | 60 MB | 247 MB |
-| 2 · Sennes → Fanes | 69 | — | 50 MB | — |
+| 2 · Sennes → Fanes | 71 | 15 | 52 MB | 98 MB |
 | 3 a 6 | — | — | — | — |
 
 ### Quando o arquivo perdeu a data
