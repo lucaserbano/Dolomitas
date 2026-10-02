@@ -18,7 +18,9 @@ export class Galeria {
     this.ganchos = ganchos;
     this.ativa = null;
     this.vistas = new Set();
-    this.automatico = true;
+    // A travessia começa mostrando só o trajeto; o interruptor "Mídias"
+    // é quem liga as paradas automáticas. main.js sincroniza com a caixa.
+    this.automatico = false;
     this.diaAtual = undefined;
 
     this.painel = document.getElementById("midia");

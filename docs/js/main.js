@@ -227,7 +227,9 @@ async function iniciar() {
     setTimeout(() => { if (!galeria.ativa) reprodutor.tocar(); }, 1900);
   });
 
-  $("#tgl-midias").addEventListener("change", (ev) => {
+  const caixaMidias = $("#tgl-midias");
+  galeria.automatico = caixaMidias.checked;   // o HTML define o padrão
+  caixaMidias.addEventListener("change", (ev) => {
     galeria.automatico = ev.target.checked;
   });
 
