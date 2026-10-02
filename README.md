@@ -44,6 +44,27 @@ Essa tabela tem prioridade sobre qualquer metadado embutido. O próprio
 script imprime um esqueleto dela ao final, listando o que não conseguiu
 ancorar.
 
+**Para preencher a tabela sozinho**, se você ainda tiver os arquivos crus:
+
+```bash
+python3 scripts/datar_por_originais.py --originais /Volumes/DJI/DCIM
+python3 scripts/datar_por_originais.py --originais /Volumes/DJI/DCIM --aplicar
+```
+
+O script acha, para cada vídeo editado, qual original tem o mesmo conteúdo,
+e copia dali a data de gravação. Compara a **imagem**, não a duração, então
+funciona mesmo com cortes e mudança de velocidade: cada quadro vira uma
+assinatura de 256 bits (dHash sobre 16×16 em tons de cinza, com equalização
+de histograma para tolerar correção de cor).
+
+Quem decide é a **margem** sobre o segundo colocado, não a distância
+absoluta — recompressão afasta todo mundo por igual. O que ficar em dúvida
+é listado em vez de adivinhado. Ao final ele ainda confere se a ordem de
+exportação bate com a de gravação, o que é um segundo indício, independente
+da imagem.
+
+Os originais são lidos onde estiverem; nada é copiado para o projeto.
+
 > **Fotos vindas do WhatsApp não têm EXIF nenhum** — o aplicativo apaga tudo,
 > inclusive a data. Para elas o script lê o horário do **nome do arquivo**
 > (`PHOTO-AAAA-MM-DD-HH-MM-SS.jpg`), interpretado no fuso desta máquina, que
