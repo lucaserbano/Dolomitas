@@ -4,9 +4,12 @@
  * Com o interruptor ligado, a travessia pausa sozinha ao alcançar cada mídia
  * e só continua quando o "X" é clicado. Desligado, os pinos seguem no mapa
  * e podem ser abertos a qualquer momento sem interromper o fluxo.
+ *
+ * Os pinos são uma camada do mapa (ver adicionarPinosMidia): marcador HTML
+ * ignora a altitude e flutua fora da trilha quando o relevo 3D está ligado.
  */
 
-import { maplibregl } from "./map.js";
+import { filtrarPinos } from "./map.js";
 
 export class Galeria {
   constructor(mapa, midias, ganchos = {}) {
@@ -16,52 +19,50 @@ export class Galeria {
     this.ativa = null;
     this.vistas = new Set();
     this.automatico = true;
+    this.diaAtual = undefined;
 
     this.painel = document.getElementById("midia");
     this.conteudo = document.getElementById("midia-conteudo");
+    this.quadro = this.painel.querySelector(".midia-quadro");
     this.hora = document.querySelector('[data-campo="mHora"]');
     this.legenda = document.querySelector('[data-campo="mLegenda"]');
+    this.contador = document.querySelector('[data-campo="mContador"]');
 
     document.getElementById("midia-fechar")
       .addEventListener("click", () => this.fechar());
+    document.getElementById("midia-ant")
+      .addEventListener("click", () => this.passar(-1));
+    document.getElementById("midia-prox")
+      .addEventListener("click", () => this.passar(1));
 
-    document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape" && this.ativa) this.fechar();
-    });
-
-    this.pinos = new Map();
-    this.criarPinos();
+    this.ligarPinos();
   }
 
-  criarPinos() {
-    this.midias.forEach((m) => {
-      const el = document.createElement("div");
-      el.className = "pino";
-      el.title = `${m.hora} · ${m.legenda}`;
-      el.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        this.abrir(m, true);
-      });
-      const marcador = new maplibregl.Marker({ element: el })
-        .setLngLat([m.lon, m.lat])
-        .addTo(this.mapa);
-      this.pinos.set(m.id, { el, marcador, dia: m.dia });
+  /** Clique e ponteiro sobre a camada de pinos. */
+  ligarPinos() {
+    const abrirDoMapa = (ev) => {
+      const f = ev.features?.[0];
+      if (!f) return;
+      this.abrir(this.midias[f.properties.indice], true);
+    };
+    this.mapa.on("click", "midias", abrirDoMapa);
+    this.mapa.on("mouseenter", "midias", () => {
+      this.mapa.getCanvas().style.cursor = "pointer";
     });
-
-    // São centenas de pinos ao longo da travessia. Mostrados todos de uma
-    // vez, eles viram uma faixa pontilhada que esconde a própria trilha.
-    this.mapa.on("zoom", () => this.ajustarPinos());
-    this.ajustarPinos();
+    this.mapa.on("mouseleave", "midias", () => {
+      this.mapa.getCanvas().style.cursor = "";
+    });
   }
 
-  /** Só a etapa em curso mostra pinos, e só com zoom suficiente. */
+  /** Só a etapa em curso mostra pinos. */
   ajustarPinos(diaAtual = this.diaAtual) {
     this.diaAtual = diaAtual;
-    const perto = this.mapa.getZoom() >= 12.5;
-    this.pinos.forEach(({ el, dia }) => {
-      const mostrar = perto && (diaAtual === undefined || dia === diaAtual);
-      el.style.display = mostrar ? "" : "none";
-    });
+    filtrarPinos(this.mapa, diaAtual);
+  }
+
+  /** Mídias da etapa em curso, na ordem em que foram feitas. */
+  get doDia() {
+    return this.midias.filter((m) => m.dia === this.diaAtual);
   }
 
   /**
@@ -72,6 +73,11 @@ export class Galeria {
     if (!this.automatico || this.ativa) return;
     const achado = this.midias.find(
       (m) => m.dia === dia.n &&
+             // As mídias feitas antes de partir e já no refúgio ficam presas
+             // à ponta do trajeto. Se abrissem sozinhas, as cinco do café da
+             // manhã se enfileirariam em t=0 e a caminhada nunca começaria.
+             // Continuam acessíveis pelas setas e pelos pinos.
+             m.fase === "trajeto" &&
              !this.vistas.has(m.id) &&
              tempo >= m.t &&
              tempo - m.t < 30,
@@ -79,25 +85,71 @@ export class Galeria {
     if (achado) this.abrir(achado, false);
   }
 
+  /** Avança ou retrocede para a mídia vizinha dentro da etapa. */
+  passar(direcao) {
+    const lista = this.doDia;
+    if (!lista.length) return;
+    const atual = this.ativa ? lista.findIndex((m) => m.id === this.ativa.id) : -1;
+    const proximo = atual < 0
+      ? (direcao > 0 ? 0 : lista.length - 1)
+      : Math.min(lista.length - 1, Math.max(0, atual + direcao));
+    if (proximo === atual) return;
+    this.abrir(lista[proximo], true);
+    // leva a travessia até o ponto da foto, para o mapa acompanhar
+    this.ganchos.aoPular?.(lista[proximo]);
+  }
+
   abrir(m, manual) {
     if (this.ativa?.id === m.id) return;
+    const anterior = this.ativa;
     this.ativa = m;
     this.vistas.add(m.id);
 
     // o painel reserva a proporção exata antes de a mídia chegar
-    const quadro = this.painel.querySelector(".midia-quadro");
-    if (m.w && m.h) quadro.style.setProperty("--prop", `${m.w} / ${m.h}`);
-    else quadro.style.removeProperty("--prop");
+    if (m.w && m.h) this.quadro.style.setProperty("--prop", `${m.w} / ${m.h}`);
+    else this.quadro.style.removeProperty("--prop");
+    this.ajustarLargura(m);
 
     this.conteudo.replaceChildren(this.montar(m));
     this.hora.textContent = m.hora;
     this.legenda.textContent = m.legenda;
     this.painel.hidden = false;
 
-    this.pinos.forEach(({ el }) => el.classList.remove("ativo"));
-    this.pinos.get(m.id)?.el.classList.add("ativo");
+    const lista = this.doDia;
+    const pos = lista.findIndex((x) => x.id === m.id);
+    this.contador.textContent = pos >= 0 ? `${pos + 1}/${lista.length}` : "";
+    document.getElementById("midia-ant").disabled = pos <= 0;
+    document.getElementById("midia-prox").disabled = pos >= lista.length - 1;
 
+    this.realcar(anterior, false);
+    this.realcar(m, true);
     this.ganchos.aoAbrir?.(m, manual);
+  }
+
+  /**
+   * Em tela larga o painel encolhe para caber a mídia sem tarja ao lado.
+   * Uma foto em pé ocuparia só o meio de um painel largo; o resto seria
+   * fundo escuro à toa. Em retrato o painel é uma folha de largura cheia.
+   */
+  ajustarLargura(m) {
+    const folha = window.matchMedia(
+      "(orientation: portrait), (max-width: 760px)").matches;
+    if (folha || !m.w || !m.h) {
+      this.painel.style.removeProperty("width");
+      return;
+    }
+    const cromo = 100;                               // legenda + setas
+    const maxL = Math.min(window.innerWidth * 0.27, 350);
+    const maxA = Math.min(window.innerHeight * 0.52, window.innerHeight - 64) - cromo;
+    const largura = Math.max(230, Math.min(maxL, maxA * (m.w / m.h)));
+    this.painel.style.width = `${Math.round(largura)}px`;
+  }
+
+  /** Destaca (ou apaga) o pino correspondente na camada. */
+  realcar(m, ligado) {
+    if (!m || !this.mapa.getSource("midias")) return;
+    const i = this.midias.indexOf(m);
+    if (i >= 0) this.mapa.setFeatureState({ source: "midias", id: i }, { ativa: ligado });
   }
 
   montar(m) {
@@ -150,7 +202,7 @@ export class Galeria {
     this.ativa = null;
     this.painel.hidden = true;
     this.conteudo.replaceChildren();
-    this.pinos.get(fechada.id)?.el.classList.remove("ativo");
+    this.realcar(fechada, false);
     this.ganchos.aoFechar?.(fechada);
   }
 

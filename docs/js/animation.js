@@ -131,6 +131,9 @@ export class Reprodutor {
        caminhante, que é o que se quer ao examinar uma encosta. */
     this.centralizar = true;
     this.rumoAuto = true;
+    /* Preferência do usuário: com a rotação desligada a câmera continua
+       acompanhando o caminhante, mas sem girar a cena. */
+    this.rotacao = true;
     /* Enquanto o marcador está sendo arrastado a câmera fica imóvel: se ela
        recentralizasse, o mapa se moveria sob o cursor e o arrasto entraria
        numa realimentação que corre até a ponta da etapa. */
@@ -168,7 +171,7 @@ export class Reprodutor {
     this.mapa.easeTo({
       center: [e.lon, e.lat],
       zoom: ZOOM, pitch: PITCH,
-      bearing: this.rumoDaTrilha(this.dia, e),
+      bearing: this.rotacao ? this.rumoDaTrilha(this.dia, e) : this.mapa.getBearing(),
       duration: 900, essential: true,
     });
     this.ganchos.aoMudarCamera?.(false);
@@ -208,7 +211,8 @@ export class Reprodutor {
       this.zoom = ZOOM;
       this.mapa.easeTo({
         center: [d.lon[0], d.lat[0]],
-        zoom: ZOOM, pitch: PITCH, bearing: this.rumoAtual,
+        zoom: ZOOM, pitch: PITCH,
+        bearing: this.rotacao ? this.rumoAtual : this.mapa.getBearing(),
         duration: 1800, essential: true,
       });
     }
@@ -264,7 +268,7 @@ export class Reprodutor {
         camera.zoom = this.zoom;
         camera.pitch = PITCH;
       }
-      if (this.rumoAuto) {
+      if (this.rumoAuto && this.rotacao) {
         const alvo = this.rumoDaTrilha(d, e);
         const delta = difAngulo(this.rumoAtual, alvo);
         // Abaixo da zona morta a câmera fica parada; acima, gira devagar e
@@ -323,7 +327,7 @@ export class Reprodutor {
 
     // Num salto grande o rumo vai direto ao alvo: interpolar daria um giro
     // longo e sem sentido.
-    if (!manterCamera && this.rumoAuto) {
+    if (!manterCamera && this.rumoAuto && this.rotacao) {
       this.rumoAtual = this.rumoDaTrilha(this.dia, estadoEm(this.dia, this.tempo));
     }
     this.atualizar();

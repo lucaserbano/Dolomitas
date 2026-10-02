@@ -456,14 +456,16 @@ button, input { font: inherit; color: inherit; }
   top: var(--e4);
   /* a altura acompanha a mídia em vez de esticar: fotos deitadas não
      deixam um vão escuro embaixo */
-  max-height: calc(100% - 2 * var(--e4));
-  width: min(38vw, 440px);
+  /* Ocupa um canto, não a tela. O mapa precisa continuar legível com a
+     foto aberta — o enquadramento é deslocado por padding no MapLibre. */
+  max-height: min(52vh, calc(100% - 2 * var(--e4)));
+  width: min(27vw, 350px);
   margin: 0;
   /* Grade em vez de flex: a faixa da imagem precisa de altura definida para
      que o max-height dela resolva. Com flex de altura indefinida a foto
      transbordava e passava por baixo da legenda. */
   display: grid;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   background: color-mix(in oklab, var(--noite) 95%, transparent);
   backdrop-filter: blur(16px);
   border: 1px solid var(--fio-forte);
@@ -481,6 +483,9 @@ button, input { font: inherit; color: inherit; }
   /* A faixa toma a proporção da própria mídia, informada pelo media.json.
      Assim o painel abraça uma foto deitada em vez de deixar tarja preta,
      e continua cabendo na tela quando a foto é bem vertical. */
+  /* Largura fixa no painel: sem isto, a altura limitada faria a proporção
+     encolher também a largura, deixando uma faixa vazia ao lado da foto. */
+  width: 100%;
   aspect-ratio: var(--prop, 3 / 2);
   max-height: 100%;
   min-height: 0;
@@ -1010,4 +1015,60 @@ button, input { font: inherit; color: inherit; }
 
 @media (orientation: portrait), (max-width: 760px) {
   .botao-recentrar { top: var(--e2); font-size: 0.6875rem; padding: 0.5em 0.9em; }
+}
+
+/* ============================================================
+   Passar de mídia em mídia
+   ============================================================ */
+
+.midia-passos {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  border-top: 1px solid var(--fio);
+}
+
+.midia-passos button {
+  width: 38px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  font-size: 1.25rem;
+  line-height: 1;
+  background: transparent;
+  color: var(--areia);
+  border: 1px solid var(--fio-forte);
+  border-radius: var(--curva);
+  cursor: pointer;
+  transition: background var(--transicao), color var(--transicao),
+              opacity var(--transicao);
+}
+.midia-passos button:hover:not(:disabled) { background: var(--areia); color: var(--noite); }
+.midia-passos button:disabled { opacity: 0.3; cursor: default; }
+
+.midia-contador {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--tinta-fraca);
+  font-variant-numeric: tabular-nums;
+}
+
+/* a legenda pode ficar longa; melhor quebrar que esticar o painel */
+.midia-legenda { flex-wrap: wrap; }
+.midia-texto { min-width: 0; }
+
+@media (orientation: portrait), (max-width: 760px) {
+  .midia { max-height: 62vh; }
+  .midia-passos { padding: var(--e2); }
+  .midia-passos button { width: 44px; height: 34px; }   /* alvo de toque */
+}
+
+/* celular deitado: sobra largura e falta altura */
+@media (orientation: landscape) and (max-height: 520px) {
+  .midia { max-height: calc(100% - 2 * var(--e2)); width: min(32vw, 300px);
+           top: var(--e2); right: var(--e2); }
+  .midia-legenda { padding: var(--e2) var(--e3); font-size: 0.75rem; }
 }

@@ -2,7 +2,8 @@
  * Orquestração: carrega os dados, monta o mapa e liga os controles.
  */
 
-import { criarMapa, ativarTerreno, adicionarTrilhas, adicionarRefugios, maplibregl } from "./map.js";
+import { criarMapa, ativarTerreno, adicionarTrilhas, adicionarRefugios,
+         adicionarPinosMidia, maplibregl } from "./map.js";
 import { Reprodutor, estadoEm, tempoMaisProximo } from "./animation.js";
 import { Galeria } from "./media.js";
 import * as hud from "./hud.js";
@@ -62,6 +63,7 @@ async function iniciar() {
   mapa.once("load", () => {
     ativarTerreno(mapa);
     adicionarTrilhas(mapa, dias);
+    adicionarPinosMidia(mapa, midias);
     adicionarRefugios(mapa, dias);
     pronto = true;
   });
@@ -106,18 +108,57 @@ async function iniciar() {
   });
 
   /* ------------------------------------------------------------- reprodutor */
+  /* O painel cobre um pedaço do mapa. Informando isso ao MapLibre como
+     padding, o ponto seguido passa a ser enquadrado na área que sobra em
+     vez de ficar escondido atrás da foto. */
+  function ajustarEnquadramento(aberto) {
+    const zero = { top: 0, right: 0, bottom: 0, left: 0 };
+
+    const aplicar = () => {
+      if (!aberto) return mapa.setPadding(zero);
+
+      /* Mede a invasão real do painel sobre o canvas, em vez de supor pela
+         orientação: em pé o painel é uma folha que mal encosta no mapa, e um
+         palpite alto jogava o caminhante para fora da tela. */
+      const m = $("#mapa").getBoundingClientRect();
+      const p = $("#midia").getBoundingClientRect();
+      const sobreporDireita = Math.max(0, m.right - p.left + 16);
+      const sobreporBaixo = Math.max(0, m.bottom - p.top + 16);
+      const folha = p.width > m.width * 0.8;
+
+      mapa.setPadding(folha
+        ? { ...zero, bottom: Math.min(sobreporBaixo, m.height * 0.55) }
+        : { ...zero, right: Math.min(sobreporDireita, m.width * 0.5) });
+    };
+
+    /* setPadding mexe na câmera e cancelaria um voo em andamento. A primeira
+       mídia do dia abre em t=0, bem no meio da aproximação inicial: sem esta
+       espera, o mapa ficava parado na visão panorâmica. */
+    if (reprodutor.cameraOcupada) mapa.once("moveend", aplicar);
+    else aplicar();
+  }
+
   const galeria = new Galeria(mapa, midias, {
     aoAbrir: (m, manual) => {
-      if (!manual && reprodutor.tocando) {
+      requestAnimationFrame(() => ajustarEnquadramento(true));
+      // Vale mesmo com a travessia ainda parada: a primeira mídia do dia
+      // cai em t=0 e, sem isto, o play de abertura rodava por baixo dela.
+      if (!manual) {
         reprodutor.pausar();
         reprodutor.pausadoPorMidia = true;
       }
     },
     aoFechar: () => {
+      ajustarEnquadramento(false);
       if (reprodutor.pausadoPorMidia) {
         reprodutor.pausadoPorMidia = false;
         reprodutor.tocar();
       }
+    },
+    // passar de foto em foto leva a travessia junto
+    aoPular: (m) => {
+      $("#resumo").hidden = true;
+      reprodutor.irPara(reprodutor.indiceDia, m.t, { manterCamera: true });
     },
   });
 
@@ -169,7 +210,7 @@ async function iniciar() {
     $("#app").setAttribute("aria-hidden", "false");
     setTimeout(() => { $("#intro").hidden = true; mapa.resize(); }, 660);
     reprodutor.prepararEtapa(0);
-    setTimeout(() => reprodutor.tocar(), 1900);
+    setTimeout(() => { if (!galeria.ativa) reprodutor.tocar(); }, 1900);
   });
 
   $("#btn-tocar").addEventListener("click", () => {
@@ -183,11 +224,17 @@ async function iniciar() {
       galeria.redefinirTudo();
       reprodutor.prepararEtapa(0);
     }
-    setTimeout(() => reprodutor.tocar(), 1900);
+    setTimeout(() => { if (!galeria.ativa) reprodutor.tocar(); }, 1900);
   });
 
   $("#tgl-midias").addEventListener("change", (ev) => {
     galeria.automatico = ev.target.checked;
+  });
+
+  $("#tgl-girar").addEventListener("change", (ev) => {
+    reprodutor.rotacao = ev.target.checked;
+    // ao voltar a girar, a câmera reencontra o rumo da trilha sem salto
+    if (ev.target.checked && reprodutor.rumoAuto) reprodutor.retomarCamera();
   });
 
   document.querySelectorAll(".velocidade button").forEach((b) => {
@@ -201,21 +248,28 @@ async function iniciar() {
   $("#btn-recentrar").addEventListener("click", () => reprodutor.retomarCamera());
 
   document.addEventListener("keydown", (ev) => {
-    if (ev.target.matches("input, button")) return;
+    const alvo = ev.target;
+    if (alvo instanceof Element && alvo.matches("input, button, select, textarea")) return;
     if (ev.code === "Space") { ev.preventDefault(); reprodutor.alternar(); return; }
-    // setas movem a etapa em passos de um minuto de caminhada
+    if (ev.code !== "ArrowLeft" && ev.code !== "ArrowRight") return;
+    ev.preventDefault();
+    const dir = ev.code === "ArrowRight" ? 1 : -1;
+
+    // Com uma mídia aberta as setas passam de foto em foto; sem nada aberto
+    // elas correm o tempo da etapa.
+    if (galeria.ativa) { galeria.passar(dir); return; }
+
     const passo = ev.shiftKey ? 600 : 60;
-    if (ev.code === "ArrowLeft" || ev.code === "ArrowRight") {
-      ev.preventDefault();
-      const dir = ev.code === "ArrowRight" ? 1 : -1;
-      $("#resumo").hidden = true;
-      reprodutor.irPara(reprodutor.indiceDia, reprodutor.tempo + dir * passo,
-                        { manterCamera: true });
-      galeria.redefinirApos(reprodutor.dia.n, reprodutor.tempo);
-    }
+    $("#resumo").hidden = true;
+    reprodutor.irPara(reprodutor.indiceDia, reprodutor.tempo + dir * passo,
+                      { manterCamera: true });
+    galeria.redefinirApos(reprodutor.dia.n, reprodutor.tempo);
   });
 
-  window.addEventListener("resize", () => mapa.resize());
+  window.addEventListener("resize", () => {
+    mapa.resize();
+    if (galeria.ativa) requestAnimationFrame(() => ajustarEnquadramento(true));
+  });
 
   // Ponto de inspeção no console do navegador: útil para conferir a câmera
   // e saltar para um trecho sem depender da interface.

@@ -128,8 +128,13 @@
       <div class="midia-quadro"><div id="midia-conteudo"></div></div>
       <figcaption class="midia-legenda">
         <span class="midia-hora" data-campo="mHora"></span>
-        <span data-campo="mLegenda"></span>
+        <span class="midia-texto" data-campo="mLegenda"></span>
       </figcaption>
+      <nav class="midia-passos">
+        <button id="midia-ant" type="button" aria-label="Mídia anterior">‹</button>
+        <span class="midia-contador" data-campo="mContador"></span>
+        <button id="midia-prox" type="button" aria-label="Próxima mídia">›</button>
+      </nav>
     </figure>
   </main>
 
@@ -149,6 +154,12 @@
         <input id="tgl-midias" type="checkbox" checked>
         <span class="interruptor-pista" aria-hidden="true"><i></i></span>
         <span class="interruptor-texto">Mídias</span>
+      </label>
+
+      <label class="interruptor" title="Com a rotação desligada a câmera segue o caminhante sem girar">
+        <input id="tgl-girar" type="checkbox" checked>
+        <span class="interruptor-pista" aria-hidden="true"><i></i></span>
+        <span class="interruptor-texto">Girar</span>
       </label>
 
       <div class="velocidade" role="group" aria-label="Velocidade">

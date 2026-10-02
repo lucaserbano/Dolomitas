@@ -189,6 +189,62 @@ export function destacarFantasma(mapa, dias, nAtual) {
   });
 }
 
+/**
+ * Pinos das mídias como camada do mapa, e não como marcadores HTML.
+ *
+ * Marcador HTML é posicionado só por lon/lat: com o relevo 3D ligado ele
+ * ignora a altitude do ponto e aparece deslocado encosta acima, mudando de
+ * lugar a cada zoom. A camada é desenhada pela GPU já drapejada no terreno,
+ * fica no lugar certo e aguenta centenas de pontos sem pesar.
+ */
+export function adicionarPinosMidia(mapa, midias) {
+  mapa.addSource("midias", {
+    type: "geojson",
+    data: {
+      type: "FeatureCollection",
+      features: midias.map((m, i) => ({
+        type: "Feature",
+        id: i,
+        properties: { id: m.id, dia: m.dia, indice: i, tipo: m.tipo },
+        geometry: { type: "Point", coordinates: [m.lon, m.lat] },
+      })),
+    },
+  });
+
+  mapa.addLayer({
+    id: "midias",
+    type: "circle",
+    source: "midias",
+    minzoom: 12,
+    filter: ["==", ["get", "dia"], -1],
+    paint: {
+      "circle-radius": [
+        "interpolate", ["linear"], ["zoom"],
+        12, 2.5,
+        14, ["case", ["boolean", ["feature-state", "ativa"], false], 7, 4],
+        17, ["case", ["boolean", ["feature-state", "ativa"], false], 11, 6.5],
+      ],
+      "circle-color": [
+        "case", ["boolean", ["feature-state", "ativa"], false],
+        "#f2d492", "#f29559",
+      ],
+      "circle-opacity": [
+        "case", ["boolean", ["feature-state", "ativa"], false], 1, 0.75,
+      ],
+      "circle-stroke-width": 1.5,
+      "circle-stroke-color": CASCA,
+      "circle-pitch-alignment": "map",
+    },
+  });
+}
+
+/** Mostra apenas os pinos da etapa em curso. */
+export function filtrarPinos(mapa, diaN) {
+  if (mapa.getLayer("midias")) {
+    mapa.setFilter("midias", ["==", ["get", "dia"], diaN ?? -1]);
+  }
+}
+
 /** Etiquetas dos pontos de partida e chegada de cada etapa. */
 export function adicionarRefugios(mapa, dias) {
   const pontos = [];
