@@ -38,6 +38,7 @@ ETAPAS = [
 # longe do trajeto, sinal de que o ponto esta errado.
 MARCOS = {
     "2026-09-19": [("Rifugio Biella", 46.6656312, 12.0845833)],
+    "2026-09-20": [("Rifugio Pederü", 46.6384000, 12.0413700)],
 }
 
 DISTANCIA_MAXIMA_MARCO = 120   # metros
