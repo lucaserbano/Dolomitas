@@ -92,12 +92,19 @@ def meta_por_tabela(caminho):
                     bruto = json.load(fh)
             except json.JSONDecodeError as erro:
                 raise SystemExit(f"{DATAS_MANUAIS} invalido: {erro}")
+            # O relogio da camera pode estar adiantado ou atrasado em
+            # relacao ao horario real. Esta chave desloca todas as datas do
+            # arquivo de uma vez, para acertar sem reescrever cada linha.
+            ajuste = timedelta(minutes=float(bruto.get("_ajuste_minutos", 0)))
+            if ajuste:
+                print(f"  (ajuste de {ajuste.total_seconds() / 60:+.0f} min "
+                      f"aplicado as datas de _datas.json)")
             for nome, texto in bruto.items():
-                if nome.startswith("_"):      # comentarios
+                if nome.startswith("_"):      # comentarios e opcoes
                     continue
                 try:
                     _datas_manuais[nome] = datetime.fromisoformat(
-                        str(texto).replace("Z", "+00:00"))
+                        str(texto).replace("Z", "+00:00")) + ajuste
                 except ValueError:
                     print(f"    ! data invalida para {nome}: {texto!r}")
             if _datas_manuais:
