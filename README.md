@@ -18,10 +18,12 @@ Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 
 ## Estado das mídias
 
-| Etapa | Fotos | Vídeos | No repositório | No bucket |
-|-------|-------|--------|----------------|-----------|
-| 1 · Braies → Sennes | 84 | 38 | 55 MB | 261 MB |
+| Etapa | Fotos | Vídeos | No repositório | No bucket R2 |
+|-------|-------|--------|----------------|--------------|
+| 1 · Braies → Sennes | 84 | 38 | 55 MB | 247 MB |
 | 2 a 6 | — | — | — | — |
+
+Bucket: `https://pub-b469c0ff44ae40a6b799c069e44960ef.r2.dev`
 
 ## Rodar na sua máquina
 
@@ -156,6 +158,31 @@ volta tudo para dentro do repositório.
 
 Em qualquer hospedagem, libere o **CORS** para o domínio do site, senão o
 navegador recusa o vídeo.
+
+### Subir os vídeos
+
+Os arquivos ficam prontos em `videos_para_subir/`, com os nomes exatos que
+o `media.json` espera. Eles vão na **raiz do bucket**, sem subpasta.
+
+Para um lote só, o painel da Cloudflare resolve: abra o bucket, *Upload →
+Select files*, selecione tudo e confirme.
+
+Para repetir a cada etapa, vale instalar o [rclone][rc]:
+
+```bash
+brew install rclone
+rclone config          # tipo: s3 → provedor: Cloudflare R2 → suas chaves
+rclone copy videos_para_subir/ r2:dolomitas --progress
+```
+
+As chaves de API saem em *R2 → Manage API Tokens*. Elas ficam só na sua
+máquina — não entram no repositório.
+
+Se um vídeo ainda não estiver no bucket, o site mostra o poster com uma
+explicação, em vez de um quadro preto. Dá para publicar antes de terminar
+o upload.
+
+[rc]: https://rclone.org/s3/#cloudflare-r2
 
 Se um vídeo não carregar, o site mostra o poster com uma explicação em vez
 de um quadro preto.
