@@ -245,13 +245,20 @@ export function filtrarPinos(mapa, diaN) {
   }
 }
 
-/** Etiquetas dos pontos de partida e chegada de cada etapa. */
+/**
+ * Etiquetas dos pontos de partida e chegada de cada etapa, mais os marcos
+ * intermediários declarados em build_trail.py (um refúgio no meio do
+ * caminho, por exemplo).
+ */
 export function adicionarRefugios(mapa, dias) {
   const pontos = [];
   dias.forEach((dia, i) => {
     if (i === 0) {
       pontos.push({ nome: dia.de, lon: dia.lon[0], lat: dia.lat[0], tipo: "inicio" });
     }
+    (dia.marcos ?? []).forEach((m) => {
+      pontos.push({ nome: m.nome, lon: m.lon, lat: m.lat, tipo: "marco" });
+    });
     const u = dia.lon.length - 1;
     pontos.push({ nome: dia.para, lon: dia.lon[u], lat: dia.lat[u], tipo: "fim" });
   });

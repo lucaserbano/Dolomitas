@@ -108,12 +108,12 @@ export class Galeria {
     // o painel reserva a proporção exata antes de a mídia chegar
     if (m.w && m.h) this.quadro.style.setProperty("--prop", `${m.w} / ${m.h}`);
     else this.quadro.style.removeProperty("--prop");
-    this.ajustarLargura(m);
 
     this.conteudo.replaceChildren(this.montar(m));
     this.hora.textContent = m.hora;
     this.legenda.textContent = m.legenda;
     this.painel.hidden = false;
+    this.ajustarLargura(m);        // depois de visível: precisa medir o painel
 
     const lista = this.doDia;
     const pos = lista.findIndex((x) => x.id === m.id);
@@ -132,17 +132,45 @@ export class Galeria {
    * fundo escuro à toa. Em retrato o painel é uma folha de largura cheia.
    */
   ajustarLargura(m) {
+    this.painel.style.removeProperty("width");
+    this.quadro.style.removeProperty("height");
+    if (!m.w || !m.h) return;
+
+    const proporcao = m.w / m.h;
     const folha = window.matchMedia(
       "(orientation: portrait), (max-width: 760px)").matches;
-    if (folha || !m.w || !m.h) {
-      this.painel.style.removeProperty("width");
+
+    /* A altura do quadro é fixada em pixels, e não deixada à mercê do
+       aspect-ratio: numa foto em pé a proporção pedia mais altura do que o
+       painel tem, a grade transbordava e a imagem saía cortada, levando as
+       setas de navegação para fora da tela junto. */
+    const legenda = this.painel.querySelector(".midia-legenda");
+    const passos = this.painel.querySelector(".midia-passos");
+    const cromo = legenda.offsetHeight + passos.offsetHeight;
+
+    // O teto vem do palco, não do max-height do CSS: aquele valor é uma
+    // expressão min() e não se deixa ler como número.
+    const palco = this.mapa.getContainer().getBoundingClientRect();
+    // Num celular deitado sobra largura e falta altura: se o painel ficasse
+    // com a mesma fatia de sempre, a foto viraria uma miniatura.
+    const fatia = window.innerHeight < 520 ? 0.86 : 0.56;
+    const teto = folha
+      ? Math.min(window.innerHeight * 0.62, window.innerHeight - 24)
+      : palco.height * fatia;
+    const maxQuadro = Math.max(150, teto - cromo);
+
+    if (folha) {
+      const largura = this.painel.clientWidth || window.innerWidth - 16;
+      this.quadro.style.height =
+        `${Math.round(Math.min(maxQuadro, largura / proporcao))}px`;
       return;
     }
-    const cromo = 100;                               // legenda + setas
-    const maxL = Math.min(window.innerWidth * 0.27, 350);
-    const maxA = Math.min(window.innerHeight * 0.52, window.innerHeight - 64) - cromo;
-    const largura = Math.max(230, Math.min(maxL, maxA * (m.w / m.h)));
-    this.painel.style.width = `${Math.round(largura)}px`;
+
+    const maxLargura = Math.min(window.innerWidth * 0.3, 380);
+    const altura = Math.min(maxQuadro, maxLargura / proporcao);
+    this.quadro.style.height = `${Math.round(altura)}px`;
+    // piso de largura para a legenda não quebrar em várias linhas
+    this.painel.style.width = `${Math.round(Math.max(260, altura * proporcao))}px`;
   }
 
   /** Destaca (ou apaga) o pino correspondente na camada. */

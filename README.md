@@ -61,6 +61,23 @@ Opções úteis:
 | `--altura 720` | Reduz a resolução dos vídeos (padrão 1080) |
 | `--forcar` | Refaz todas as conversões do zero |
 
+## Marcar um ponto no meio da etapa
+
+Partida e chegada são rotuladas automaticamente. Para nomear algo no meio do
+caminho — um refúgio por onde se passou sem dormir, por exemplo — acrescente
+em `scripts/build_trail.py`:
+
+```python
+MARCOS = {
+    "2026-09-19": [("Rifugio Biella", 46.6656312, 12.0845833)],
+}
+```
+
+As coordenadas saem do OpenStreetMap. O script procura o ponto do trajeto
+mais próximo, calcula o tempo de caminhada até ali e **avisa se o ponto cair
+a mais de 120 m da trilha** — sinal de coordenada errada. Depois é só rodar
+`build_trail.py` de novo.
+
 ## Reprocessar o trajeto
 
 ```bash

@@ -458,8 +458,8 @@ button, input { font: inherit; color: inherit; }
      deixam um vão escuro embaixo */
   /* Ocupa um canto, não a tela. O mapa precisa continuar legível com a
      foto aberta — o enquadramento é deslocado por padding no MapLibre. */
-  max-height: min(52vh, calc(100% - 2 * var(--e4)));
-  width: min(27vw, 350px);
+  max-height: calc(100% - 2 * var(--e4));
+  width: min(30vw, 380px);
   margin: 0;
   /* Grade em vez de flex: a faixa da imagem precisa de altura definida para
      que o max-height dela resolva. Com flex de altura indefinida a foto

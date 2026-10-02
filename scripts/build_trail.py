@@ -33,6 +33,16 @@ ETAPAS = [
     ("2026-09-24", "Passo Staulanza", "Borca di Cadore"),
 ]
 
+# Pontos notaveis no meio de uma etapa, alem da partida e da chegada.
+# Coordenadas conferidas no OpenStreetMap; o script avisa se alguma cair
+# longe do trajeto, sinal de que o ponto esta errado.
+MARCOS = {
+    "2026-09-19": [("Rifugio Biella", 46.6656312, 12.0845833)],
+}
+
+DISTANCIA_MAXIMA_MARCO = 120   # metros
+
+
 # Parametros de processamento
 RDP_EPSILON = 2.5      # metros — tolerancia da simplificacao da geometria
 PASSO_TEMPORAL = 10    # segundos — resolucao minima da serie de metricas
@@ -419,6 +429,22 @@ def processar_dia(n, data, de, para, caminho_gpx, cor, saude):
         serie["gain"].append(round(ganho_acum[i], 1))
         serie["loss"].append(round(perda_acum[i], 1))
 
+    marcos = []
+    for nome_marco, mlat, mlon in MARCOS.get(data, []):
+        j = min(range(len(pontos)),
+                key=lambda k: haversine(mlat, mlon, pontos[k]["lat"], pontos[k]["lon"]))
+        afastamento = haversine(mlat, mlon, pontos[j]["lat"], pontos[j]["lon"])
+        if afastamento > DISTANCIA_MAXIMA_MARCO:
+            print(f"    ! {nome_marco} esta a {afastamento:.0f} m do trajeto; conferir")
+        marcos.append({
+            "nome": nome_marco,
+            "lon": round(mlon, 6), "lat": round(mlat, 6),
+            "t": round(pontos[j]["ts"] - t0, 1),
+            "dist": round(dist_acum[j]),
+        })
+        print(f"    marco: {nome_marco} em {(pontos[j]['ts'] - t0) / 3600:.2f} h "
+              f"({afastamento:.0f} m do trajeto)")
+
     treino = saude["treinos"].get(data, {})
     duracao = pontos[-1]["ts"] - t0
     pausas = treino.get("pausas", [])
@@ -443,7 +469,8 @@ def processar_dia(n, data, de, para, caminho_gpx, cor, saude):
 
     return {
         "n": n, "data": data, "de": de, "para": para, "cor": cor,
-        "pontos": len(indices), "paradas": paradas, "resumo": resumo, **serie,
+        "pontos": len(indices), "paradas": paradas, "marcos": marcos,
+        "resumo": resumo, **serie,
     }
 
 
