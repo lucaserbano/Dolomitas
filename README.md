@@ -20,8 +20,15 @@ Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 
 | Etapa | Fotos | Vídeos | No repositório | No bucket R2 |
 |-------|-------|--------|----------------|--------------|
-| 1 · Braies → Sennes | 84 | 38 | 55 MB | 247 MB |
-| 2 a 6 | — | — | — | — |
+| 1 · Braies → Sennes | 88 | 38 | 60 MB | 247 MB |
+| 2 · Sennes → Fanes | 69 | — | 50 MB | — |
+| 3 a 6 | — | — | — | — |
+
+> **Fotos vindas do WhatsApp não têm EXIF nenhum** — o aplicativo apaga tudo,
+> inclusive a data. Para elas o script lê o horário do **nome do arquivo**
+> (`PHOTO-AAAA-MM-DD-HH-MM-SS.jpg`), interpretado no fuso desta máquina, que
+> foi quem exportou. Vale conferir uma ou outra pelo conteúdo: se a foto não
+> combinar com a altitude da legenda, o fuso do nome é outro.
 
 Bucket: `https://pub-b469c0ff44ae40a6b799c069e44960ef.r2.dev`
 

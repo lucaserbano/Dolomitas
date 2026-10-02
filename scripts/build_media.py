@@ -152,6 +152,26 @@ def meta_por_mdls(caminho):
     return quando, local
 
 
+# O WhatsApp exporta como PHOTO-AAAA-MM-DD-HH-MM-SS.jpg, com a hora local
+# da maquina que exportou. E o unico horario que sobra: o aplicativo apaga
+# o EXIF por completo.
+RE_NOME_WHATSAPP = re.compile(
+    r"(?:PHOTO|VIDEO|IMG|WA)[-_](\d{4})-(\d{2})-(\d{2})[-_](\d{2})[-_.](\d{2})[-_.](\d{2})")
+
+
+def meta_por_nome(caminho):
+    """Horario embutido no nome do arquivo, quando ele segue o padrao."""
+    m = RE_NOME_WHATSAPP.search(os.path.basename(caminho))
+    if not m:
+        return None, None
+    try:
+        local = datetime(*(int(g) for g in m.groups()))
+    except ValueError:
+        return None, None
+    # Sem fuso no nome: vale o da maquina, que foi quem escreveu o arquivo.
+    return local.astimezone(), None
+
+
 def meta_por_ffprobe(caminho):
     """creation_time e localizacao ISO6179 dos videos do iPhone."""
     saida = _rodar(["ffprobe", "-v", "quiet", "-print_format", "json",
@@ -192,8 +212,11 @@ def meta_por_ffprobe(caminho):
 
 def ler_metadados(caminho, ehvideo):
     """Tenta cada fonte de metadados em ordem ate obter um horario."""
-    tentativas = ([meta_por_ffprobe, meta_por_mdls] if ehvideo
-                  else [meta_por_pillow, meta_por_mdls, meta_por_ffprobe])
+    # O nome vem antes do Spotlight: a data do arquivo se perde ao copiar a
+    # pasta, enquanto o nome viaja junto.
+    tentativas = ([meta_por_ffprobe, meta_por_nome, meta_por_mdls] if ehvideo
+                  else [meta_por_pillow, meta_por_nome, meta_por_mdls,
+                        meta_por_ffprobe])
     quando = local = None
     for fn in tentativas:
         q, l = fn(caminho)
