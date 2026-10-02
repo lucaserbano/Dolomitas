@@ -32,6 +32,11 @@ DIR_SAIDA = os.path.join(RAIZ, "docs", "media")
 DIR_VIDEOS = os.path.join(RAIZ, "videos_para_subir")
 CONFIG = os.path.join(RAIZ, "scripts", "config.json")
 
+# Alguns aplicativos reexportam o arquivo e apagam todo vestigio da data de
+# captura — o DJI Mimo faz isso. Para esses casos, este arquivo mapeia o nome
+# do arquivo ao instante real de gravacao e tem prioridade sobre tudo.
+DATAS_MANUAIS = os.path.join(RAIZ, "midias", "_datas.json")
+
 EXT_FOTO = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".tif", ".tiff", ".webp"}
 EXT_VIDEO = {".mov", ".mp4", ".m4v", ".avi"}
 
@@ -71,6 +76,33 @@ def _graus(valor, ref):
     if ref in ("S", "W"):
         d = -d
     return d
+
+
+_datas_manuais = None
+
+
+def meta_por_tabela(caminho):
+    """Data vinda de midias/_datas.json, quando o arquivo nao tem nenhuma."""
+    global _datas_manuais
+    if _datas_manuais is None:
+        _datas_manuais = {}
+        if os.path.exists(DATAS_MANUAIS):
+            try:
+                with open(DATAS_MANUAIS, encoding="utf-8") as fh:
+                    bruto = json.load(fh)
+            except json.JSONDecodeError as erro:
+                raise SystemExit(f"{DATAS_MANUAIS} invalido: {erro}")
+            for nome, texto in bruto.items():
+                if nome.startswith("_"):      # comentarios
+                    continue
+                try:
+                    _datas_manuais[nome] = datetime.fromisoformat(
+                        str(texto).replace("Z", "+00:00"))
+                except ValueError:
+                    print(f"    ! data invalida para {nome}: {texto!r}")
+            if _datas_manuais:
+                print(f"  ({len(_datas_manuais)} datas lidas de _datas.json)")
+    return _datas_manuais.get(os.path.basename(caminho)), None
 
 
 def meta_por_pillow(caminho):
@@ -172,6 +204,21 @@ def meta_por_nome(caminho):
     return local.astimezone(), None
 
 
+def meta_por_arquivo(caminho):
+    """Data de criacao do proprio arquivo, lida do sistema de arquivos.
+
+    E o mesmo instante que o Spotlight reporta, mas sem depender do daemon
+    de indexacao — que pode estar fora do ar e devolver vazio, derrubando a
+    ancoragem de arquivos que antes funcionavam.
+    """
+    try:
+        st = os.stat(caminho)
+    except OSError:
+        return None, None
+    quando = getattr(st, "st_birthtime", None) or st.st_mtime
+    return datetime.fromtimestamp(quando, timezone.utc), None
+
+
 def meta_por_ffprobe(caminho):
     """creation_time e localizacao ISO6179 dos videos do iPhone."""
     saida = _rodar(["ffprobe", "-v", "quiet", "-print_format", "json",
@@ -214,9 +261,13 @@ def ler_metadados(caminho, ehvideo):
     """Tenta cada fonte de metadados em ordem ate obter um horario."""
     # O nome vem antes do Spotlight: a data do arquivo se perde ao copiar a
     # pasta, enquanto o nome viaja junto.
-    tentativas = ([meta_por_ffprobe, meta_por_nome, meta_por_mdls] if ehvideo
-                  else [meta_por_pillow, meta_por_nome, meta_por_mdls,
-                        meta_por_ffprobe])
+    # A tabela manual vem primeiro: ela so existe para os casos em que o
+    # arquivo perdeu a data, e nesses o que estiver embutido esta errado.
+    tentativas = ([meta_por_tabela, meta_por_ffprobe, meta_por_nome,
+                   meta_por_mdls, meta_por_arquivo]
+                  if ehvideo
+                  else [meta_por_tabela, meta_por_pillow, meta_por_nome,
+                        meta_por_mdls, meta_por_arquivo, meta_por_ffprobe])
     quando = local = None
     for fn in tentativas:
         q, l = fn(caminho)
@@ -637,6 +688,11 @@ def main():
         print(f"\n{len(sem_ancora)} nao ancoradas:")
         for nome, motivo in sem_ancora:
             print(f"  {nome}: {motivo}")
+        print("\nPara datar na mao, crie midias/_datas.json assim:")
+        print("  {")
+        for nome, _ in sem_ancora[:3]:
+            print(f'    "{nome}": "2026-09-20T12:34:56+02:00",')
+        print("  }")
         print("\nSe forem fotos editadas, exporte de novo pelo app Fotos usando")
         print("'Exportar Original Nao Modificado' para preservar os metadados.")
 

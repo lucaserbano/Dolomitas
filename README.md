@@ -24,6 +24,26 @@ Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 | 2 · Sennes → Fanes | 69 | — | 50 MB | — |
 | 3 a 6 | — | — | — | — |
 
+### Quando o arquivo perdeu a data
+
+Alguns aplicativos reexportam a mídia e apagam tudo — o **DJI Mimo** é um
+deles: o `creation_time` do arquivo exportado é a hora da exportação, e não
+sobra nenhum vestígio da gravação, nem nos bytes, nem nos atributos do
+macOS, nem na Fototeca.
+
+Para esses casos, crie `midias/_datas.json` com o instante real de cada um:
+
+```json
+{
+  "1790947806725.MOV": "2026-09-20T12:34:56+02:00",
+  "1790948047577.MOV": "2026-09-20T12:41:10+02:00"
+}
+```
+
+Essa tabela tem prioridade sobre qualquer metadado embutido. O próprio
+script imprime um esqueleto dela ao final, listando o que não conseguiu
+ancorar.
+
 > **Fotos vindas do WhatsApp não têm EXIF nenhum** — o aplicativo apaga tudo,
 > inclusive a data. Para elas o script lê o horário do **nome do arquivo**
 > (`PHOTO-AAAA-MM-DD-HH-MM-SS.jpg`), interpretado no fuso desta máquina, que
