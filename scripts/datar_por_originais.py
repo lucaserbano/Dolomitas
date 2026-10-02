@@ -31,8 +31,18 @@ from datetime import datetime, timezone
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXT_VIDEO = {".mov", ".mp4", ".m4v", ".avi", ".lrf"}
 
+# Camera 360 (DJI Osmo 360): o arquivo cru e dual fisheye e o video exportado
+# e um recorte reenquadrado dele. Para comparar, reprojetamos o cru em varias
+# direcoes e procuramos a que bate.
+YAWS = tuple(range(0, 360, 30))
+PITCHES = (0,)
+# O recorte exportado e 9:16; projetar direto na grade quase quadrada do
+# hash deformava a geometria de um jeito que o alvo nao sofre.
+PROJ_L, PROJ_A = 180, 320
+FOV_H, FOV_V = 70, 110
+
 PASSO_ALVO = 0.5      # segundos entre quadros amostrados do video editado
-PASSO_ORIGEM = 0.5    # segundos entre quadros amostrados do original
+PASSO_ORIGEM = 2.0    # segundos entre quadros amostrados do original
 LADO = 16             # hash de 16x16 = 256 bits
 LARGURA = LADO + 1    # uma coluna a mais: o dHash compara vizinhos
 # Quem decide e a MARGEM sobre o segundo colocado: a distancia absoluta
@@ -40,6 +50,53 @@ LARGURA = LADO + 1    # uma coluna a mais: o dHash compara vizinhos
 # sobe junto. Dois videos sem relacao ficam perto de 0.5.
 LIMITE_BOM = 0.38     # acima disto nem o primeiro colocado convence
 MARGEM_MINIMA = 0.07  # vantagem exigida sobre o segundo colocado
+
+
+def eh_360(caminho):
+    """Dual fisheye vem em quadro 2:1; e a assinatura desse formato."""
+    saida = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
+         "-show_entries", "stream=width,height", "-of", "csv=p=0", caminho],
+        capture_output=True, text=True).stdout.strip().split(",")
+    try:
+        l, a = int(saida[0]), int(saida[1])
+    except (ValueError, IndexError):
+        return False
+    return a > 0 and 1.9 < l / a < 2.1
+
+
+def assinaturas_360(caminho, passo):
+    """Assinaturas do cru 360, varrendo varias direcoes de camera."""
+    todas = []
+    for pitch in PITCHES:
+        for yaw in YAWS:
+            vf = (f"fps=1/{passo},"
+                  f"v360=dfisheye:flat:ih_fov=193:iv_fov=193:"
+                  f"yaw={yaw}:pitch={pitch}:h_fov={FOV_H}:v_fov={FOV_V}:"
+                  f"w={PROJ_L}:h={PROJ_A},"
+                  f"format=gray,histeq=strength=0.5,scale={LARGURA}:{LADO}")
+            todas += _hashes(caminho, vf)
+    return todas
+
+
+def _hashes(caminho, vf):
+    cmd = ["ffmpeg", "-v", "error", "-i", caminho, "-map", "0:v:0", "-vf", vf,
+           "-f", "rawvideo", "-pix_fmt", "gray", "-"]
+    try:
+        bruto = subprocess.run(cmd, capture_output=True, timeout=900).stdout
+    except (subprocess.SubprocessError, OSError):
+        return []
+    tam = LARGURA * LADO
+    saida = []
+    for i in range(0, len(bruto) - tam + 1, tam):
+        q = bruto[i:i + tam]
+        h = 0
+        for linha in range(LADO):
+            base = linha * LARGURA
+            for col in range(LADO):
+                h = (h << 1) | (1 if q[base + col] > q[base + col + 1] else 0)
+        saida.append(h)
+    return saida
 
 
 def assinaturas(caminho, passo):
@@ -127,37 +184,89 @@ def parear(alvos, origens):
         if h:
             catalogo.append((p, h, quando_gravou(p)))
 
-    print(f"\nComparando {len(alvos)} editados:")
-    resultado, duvidosos = {}, []
+    catalogo.sort(key=lambda c: c[2] or datetime.min.replace(tzinfo=timezone.utc))
+    alvos = sorted(alvos, key=os.path.basename)
+
+    print(f"\nAssinando {len(alvos)} editados e montando a matriz:")
+    custo = []
     for p in alvos:
         marcas = assinaturas(p, PASSO_ALVO)
-        nome = os.path.basename(p)
-        if not marcas:
-            duvidosos.append((nome, "nao consegui ler os quadros"))
-            continue
-
-        notas = []
-        for origem, banco, data in catalogo:
-            # para cada quadro do editado, o quadro mais parecido do original
+        linha = []
+        for _, banco, _ in catalogo:
+            if not marcas or not banco:
+                linha.append(1.0)
+                continue
             # para cada quadro do editado, o quadro mais parecido do
             # original; o terco inferior resume bem e tolera alguns ruins
             perto = sorted(min(distancia(m, b) for b in banco) for m in marcas)
             corte = max(1, len(perto) // 3)
-            notas.append((sum(perto[:corte]) / corte, origem, data))
-        notas.sort()
+            linha.append(sum(perto[:corte]) / corte)
+        custo.append(linha)
+        j = min(range(len(linha)), key=lambda k: linha[k])
+        print(f"  {os.path.basename(p):28s} isolado → "
+              f"{os.path.basename(catalogo[j][0]):30s} dif {linha[j]:.3f}")
 
-        melhor, segundo = notas[0], (notas[1] if len(notas) > 1 else None)
-        margem = (segundo[0] - melhor[0]) if segundo else 1.0
-        ok = melhor[0] <= LIMITE_BOM and margem >= MARGEM_MINIMA
+    print("\nAlinhando a sequencia:")
+    return avaliar(alvos, catalogo, custo, alinhar(custo))
 
-        print(f"  {nome:28s} → {os.path.basename(melhor[1]):30s} "
-              f"dif {melhor[0]:.3f}  margem {margem:.3f}  "
-              f"{'ok' if ok else 'INCERTO'}")
-        if ok and melhor[2]:
-            resultado[nome] = melhor[2]
+
+def alinhar(custo):
+    """Casa cada editado com um original preservando a ordem.
+
+    Os videos sao exportados na mesma sequencia em que foram gravados, entao
+    formam uma subsequencia crescente dos crus. Impor essa ordem e o que
+    torna o resultado confiavel: um pareamento isolado pode errar, mas a
+    sequencia inteira dificilmente encaixa errado de ponta a ponta.
+    """
+    n, m = len(custo), len(custo[0]) if custo else 0
+    if not n or m < n:
+        return [None] * n
+    INF = float("inf")
+    melhor = [[INF] * (m + 1) for _ in range(n + 1)]
+    de = [[None] * (m + 1) for _ in range(n + 1)]
+    for j in range(m + 1):
+        melhor[0][j] = 0.0
+    for i in range(1, n + 1):
+        for j in range(i, m + 1):
+            pular = melhor[i][j - 1]
+            usar = melhor[i - 1][j - 1] + custo[i - 1][j - 1]
+            if usar <= pular:
+                melhor[i][j], de[i][j] = usar, "usar"
+            else:
+                melhor[i][j], de[i][j] = pular, "pular"
+    escolha = [None] * n
+    i, j = n, m
+    while i > 0 and j > 0:
+        if de[i][j] == "usar":
+            escolha[i - 1] = j - 1
+            i -= 1
+        j -= 1
+    return escolha
+
+
+def avaliar(alvos, catalogo, custo, atribuicao):
+    """Converte o alinhamento em datas, separando o que ficou duvidoso."""
+    resultado, duvidosos = {}, []
+    for i, p in enumerate(alvos):
+        nome = os.path.basename(p)
+        j = atribuicao[i]
+        if j is None:
+            duvidosos.append((nome, "o alinhamento nao encontrou par"))
+            continue
+        d = custo[i][j]
+        rivais = sorted(v for k, v in enumerate(custo[i]) if k != j)
+        margem = (rivais[0] - d) if rivais else 1.0
+        origem, _, data = catalogo[j]
+        isolado = min(range(len(custo[i])), key=lambda k: custo[i][k])
+        selo = "ok" if d <= LIMITE_BOM else "FRACO"
+        if isolado != j:
+            selo += "  (a ordem corrigiu o palpite isolado)"
+        print(f"  {nome:28s} → {os.path.basename(origem):30s} "
+              f"dif {d:.3f}  margem {margem:+.3f}  {selo}")
+        if d <= LIMITE_BOM and data:
+            resultado[nome] = data
         else:
-            duvidosos.append((nome, f"melhor palpite {os.path.basename(melhor[1])} "
-                                    f"(dif {melhor[0]:.3f}, margem {margem:.3f})"))
+            duvidosos.append((nome, f"{os.path.basename(origem)} (dif {d:.3f})"))
     return resultado, duvidosos
 
 
@@ -194,6 +303,8 @@ def main():
                     help="pasta com os videos sem data (padrao: midias/)")
     ap.add_argument("--so-sem-data", action="store_true", default=True,
                     help="considerar apenas os videos que o build_media nao ancorou")
+    ap.add_argument("--filtro", default="",
+                    help="so considera originais cujo nome contenha este texto")
     ap.add_argument("--aplicar", action="store_true",
                     help="gravar o resultado em midias/_datas.json")
     args = ap.parse_args()
@@ -203,6 +314,8 @@ def main():
 
     alvos = listar(args.alvos)
     origens = [p for p in listar(args.originais)
+               if args.filtro in os.path.basename(p)]
+    origens = [p for p in origens
                if os.path.abspath(p) not in {os.path.abspath(a) for a in alvos}]
     if not alvos:
         raise SystemExit("Nenhum video em " + args.alvos)

@@ -65,6 +65,14 @@ da imagem.
 
 Os originais são lidos onde estiverem; nada é copiado para o projeto.
 
+> **O cruzamento automático não funciona com fonte 360.** Foi testado contra
+> o cartão da Osmo 360 e falhou: o cru é dual fisheye e o exportado é um
+> recorte reenquadrado dele, então as assinaturas ficam em 0,39–0,44 quando
+> o acaso é 0,50. Pior, a atribuição muda conforme os parâmetros — sinal de
+> que nada está decidindo. Vinte e três clipes do mesmo dia, mesma luz e
+> mesmas campinas são genuinamente parecidos demais. Para esses casos o
+> caminho é parear à mão e preencher o `_datas.json`.
+
 > **Fotos vindas do WhatsApp não têm EXIF nenhum** — o aplicativo apaga tudo,
 > inclusive a data. Para elas o script lê o horário do **nome do arquivo**
 > (`PHOTO-AAAA-MM-DD-HH-MM-SS.jpg`), interpretado no fuso desta máquina, que
