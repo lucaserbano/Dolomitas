@@ -32,6 +32,13 @@ export class Galeria {
 
     document.getElementById("midia-fechar")
       .addEventListener("click", () => this.fechar());
+
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && this.ativa) {
+        ev.preventDefault();
+        this.fechar();
+      }
+    });
     document.getElementById("midia-ant")
       .addEventListener("click", () => this.passar(-1));
     document.getElementById("midia-prox")

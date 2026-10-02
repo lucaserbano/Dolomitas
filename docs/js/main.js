@@ -139,22 +139,15 @@ async function iniciar() {
   }
 
   const galeria = new Galeria(mapa, midias, {
-    aoAbrir: (m, manual) => {
+    /* Abrir uma mídia sempre para a travessia, e fechá-la nunca a retoma:
+       quem decide quando o trajeto anda é o botão de play. Sem isso, passar
+       de foto em foto deixava uma retomada pendente que disparava sozinha
+       no momento de fechar. */
+    aoAbrir: () => {
       requestAnimationFrame(() => ajustarEnquadramento(true));
-      // Vale mesmo com a travessia ainda parada: a primeira mídia do dia
-      // cai em t=0 e, sem isto, o play de abertura rodava por baixo dela.
-      if (!manual) {
-        reprodutor.pausar();
-        reprodutor.pausadoPorMidia = true;
-      }
+      reprodutor.pausar();
     },
-    aoFechar: () => {
-      ajustarEnquadramento(false);
-      if (reprodutor.pausadoPorMidia) {
-        reprodutor.pausadoPorMidia = false;
-        reprodutor.tocar();
-      }
-    },
+    aoFechar: () => ajustarEnquadramento(false),
     // passar de foto em foto leva a travessia junto
     aoPular: (m) => {
       $("#resumo").hidden = true;

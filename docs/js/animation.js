@@ -124,7 +124,6 @@ export class Reprodutor {
     this.rumoAtual = 0;
     this.ultimoQuadro = 0;
     this.quadro = null;
-    this.pausadoPorMidia = false;
 
     /* Duas liberdades independentes. Arrastar o mapa solta o enquadramento;
        girar solta o rumo. Assim dá para girar a cena e continuar seguindo o
