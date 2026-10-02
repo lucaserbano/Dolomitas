@@ -1072,3 +1072,106 @@ button, input { font: inherit; color: inherit; }
            top: var(--e2); right: var(--e2); }
   .midia-legenda { padding: var(--e2) var(--e3); font-size: 0.75rem; }
 }
+
+/* ============================================================
+   Roda de bússola
+   ============================================================ */
+
+.roda {
+  position: absolute;
+  z-index: 11;
+  left: var(--e4);
+  bottom: var(--e4);
+  width: 76px;
+  display: grid;
+  justify-items: center;
+  gap: 0.35em;
+  cursor: grab;
+  touch-action: none;          /* o arrasto é nosso, não da página */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.roda.girando { cursor: grabbing; }
+
+.roda-disco {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 38%,
+      color-mix(in oklab, var(--ardosia) 92%, transparent) 0%,
+      color-mix(in oklab, var(--noite) 94%, transparent) 70%);
+  border: 1px solid var(--fio-forte);
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--pedra) 14%, transparent);
+  transition: border-color var(--transicao);
+}
+.roda:hover .roda-disco,
+.roda:focus-visible .roda-disco { border-color: var(--areia); }
+
+/* entalhes nas quatro direções, para a rotação ter referência visual */
+.roda-sulco {
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background:
+    conic-gradient(from 0deg,
+      var(--fio-forte) 0 1.2deg, transparent 1.2deg 88.8deg,
+      var(--fio-forte) 88.8deg 91.2deg, transparent 91.2deg 178.8deg,
+      var(--fio-forte) 178.8deg 181.2deg, transparent 181.2deg 268.8deg,
+      var(--fio-forte) 268.8deg 271.2deg, transparent 271.2deg 360deg);
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 60%);
+  mask: radial-gradient(circle, transparent 58%, #000 60%);
+  pointer-events: none;
+}
+
+/* a agulha aponta para o norte da cena */
+.roda-agulha {
+  position: absolute;
+  left: 50%;
+  top: 11px;
+  width: 0; height: 0;
+  translate: -50% 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 17px solid var(--brasa);
+  pointer-events: none;
+}
+
+.roda-norte {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  translate: -50% 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--tinta-fraca);
+  pointer-events: none;
+}
+
+.roda-valor {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--tinta-meia);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 4px var(--abismo);
+  pointer-events: none;
+}
+
+@media (orientation: portrait), (max-width: 760px) {
+  .roda { left: var(--e2); bottom: var(--e2); width: 62px; }
+  .roda-disco { width: 62px; height: 62px; }
+  .roda-agulha { top: 9px; border-bottom-width: 14px; }
+}
+
+/* celular deitado: a barra inferior fica rente, então a roda sobe um pouco */
+@media (orientation: landscape) and (max-height: 520px) {
+  .roda { width: 54px; left: var(--e2); bottom: var(--e2); }
+  .roda-disco { width: 54px; height: 54px; }
+  .roda-agulha { top: 7px; border-bottom-width: 12px; border-left-width: 4px; border-right-width: 4px; }
+  .roda-norte { font-size: 0.5rem; bottom: 8px; }
+  .roda-valor { display: none; }
+}

@@ -99,6 +99,17 @@
   <main id="palco">
     <div id="mapa"></div>
 
+    <div id="roda" class="roda" role="slider" tabindex="0"
+         aria-label="Girar a câmera" aria-valuemin="0" aria-valuemax="359"
+         aria-valuenow="0" title="Arraste para girar · dois cliques voltam ao norte">
+      <div class="roda-disco">
+        <span class="roda-norte">N</span>
+        <i class="roda-agulha" aria-hidden="true"></i>
+        <i class="roda-sulco" aria-hidden="true"></i>
+      </div>
+      <span class="roda-valor">0°</span>
+    </div>
+
     <button id="btn-recentrar" class="botao-recentrar" type="button" hidden>
       <span aria-hidden="true">◎</span> Seguir o caminhante
     </button>

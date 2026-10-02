@@ -7,6 +7,7 @@ import { criarMapa, ativarTerreno, adicionarTrilhas, adicionarRefugios,
 import { Reprodutor, estadoEm, tempoMaisProximo } from "./animation.js";
 import { Galeria } from "./media.js";
 import * as hud from "./hud.js";
+import { instalarRoda } from "./roda.js";
 
 const $ = (s) => document.querySelector(s);
 
@@ -242,9 +243,14 @@ async function iniciar() {
 
   $("#btn-recentrar").addEventListener("click", () => reprodutor.retomarCamera());
 
+  // Girar pela roda solta o rumo automático; o enquadramento continua
+  // seguindo o caminhante, só para de girar sozinho.
+  instalarRoda(mapa, () => reprodutor.soltar("rumo"));
+
   document.addEventListener("keydown", (ev) => {
     const alvo = ev.target;
-    if (alvo instanceof Element && alvo.matches("input, button, select, textarea")) return;
+    if (alvo instanceof Element
+        && alvo.matches('input, button, select, textarea, [role="slider"]')) return;
     if (ev.code === "Space") { ev.preventDefault(); reprodutor.alternar(); return; }
     if (ev.code !== "ArrowLeft" && ev.code !== "ArrowRight") return;
     ev.preventDefault();
