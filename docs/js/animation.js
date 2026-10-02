@@ -7,10 +7,17 @@
 
 import { desenharAte, destacarFantasma } from "./map.js";
 
-const PITCH = 62;
-const ZOOM = 14.6;
-const SUAVIZACAO_RUMO = 0.07;  // quanto menor, mais lento o giro da câmera
-const OLHAR_ADIANTE = 45;      // metros à frente usados para calcular o rumo
+const PITCH = 56;          // mais baixo que antes: enxerga o relevo à frente
+const ZOOM = 14.3;
+
+/* A trilha zigueza o tempo todo. Se o rumo vier dos metros imediatamente à
+   frente, a câmera gira a cada curva e embrulha o estômago. Então o rumo é
+   a tangente entre um ponto atrás e outro bem adiante, o que entrega a
+   direção geral da caminhada em vez da direção instantânea. */
+const OLHAR_ATRAS = 120;   // metros
+const OLHAR_ADIANTE = 400; // metros
+const GIRO_MAXIMO = 7;     // graus por segundo
+const ZONA_MORTA = 5;      // graus: abaixo disso a câmera nem se mexe
 
 /** Busca binária: último índice cujo tempo é <= alvo. */
 function indicePara(ts, alvo) {
@@ -20,6 +27,18 @@ function indicePara(ts, alvo) {
   while (hi - lo > 1) {
     const meio = (lo + hi) >> 1;
     if (ts[meio] <= alvo) lo = meio; else hi = meio;
+  }
+  return lo;
+}
+
+/** Índice do ponto mais próximo de uma distância acumulada. */
+function indicePorDistancia(dist, alvo) {
+  let lo = 0, hi = dist.length - 1;
+  if (alvo <= dist[0]) return 0;
+  if (alvo >= dist[hi]) return hi;
+  while (hi - lo > 1) {
+    const meio = (lo + hi) >> 1;
+    if (dist[meio] <= alvo) lo = meio; else hi = meio;
   }
   return lo;
 }
@@ -38,8 +57,7 @@ export function estadoEm(dia, tempo) {
   const dist = mix(dia.dist);
 
   return {
-    t,
-    i,
+    t, i,
     lon: mix(dia.lon),
     lat: mix(dia.lat),
     ele: mix(dia.ele),
@@ -52,6 +70,32 @@ export function estadoEm(dia, tempo) {
   };
 }
 
+/** Tempo na etapa correspondente a uma distância percorrida. */
+export function tempoNaDistancia(dia, alvo) {
+  const i = indicePorDistancia(dia.dist, alvo);
+  const j = Math.min(i + 1, dia.dist.length - 1);
+  const vao = dia.dist[j] - dia.dist[i];
+  const f = vao > 0 ? (alvo - dia.dist[i]) / vao : 0;
+  return dia.t[i] + f * (dia.t[j] - dia.t[i]);
+}
+
+/**
+ * Tempo da etapa cujo ponto está mais próximo de uma coordenada.
+ * Usado ao arrastar o marcador do caminhante sobre o mapa.
+ */
+export function tempoMaisProximo(dia, lon, lat) {
+  const escala = Math.cos((lat * Math.PI) / 180);
+  let melhor = Infinity;
+  let indice = 0;
+  for (let i = 0; i < dia.lon.length; i += 1) {
+    const dx = (dia.lon[i] - lon) * escala;
+    const dy = dia.lat[i] - lat;
+    const d = dx * dx + dy * dy;
+    if (d < melhor) { melhor = d; indice = i; }
+  }
+  return dia.t[indice];
+}
+
 /** Rumo em graus entre dois pontos geográficos. */
 function rumo(lon1, lat1, lon2, lat2) {
   const f1 = (lat1 * Math.PI) / 180;
@@ -62,10 +106,9 @@ function rumo(lon1, lat1, lon2, lat2) {
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
-/** Interpola ângulos pelo caminho mais curto — sem o salto em 0°/360°. */
-function misturarAngulo(de, para, f) {
-  let d = ((para - de + 540) % 360) - 180;
-  return (de + d * f + 360) % 360;
+/** Menor diferença entre dois ângulos, no intervalo [-180, 180]. */
+function difAngulo(de, para) {
+  return ((para - de + 540) % 360) - 180;
 }
 
 export class Reprodutor {
@@ -81,25 +124,68 @@ export class Reprodutor {
     this.rumoAtual = 0;
     this.ultimoQuadro = 0;
     this.quadro = null;
-    this.seguirCamera = true;
     this.pausadoPorMidia = false;
 
-    // Zoom que a camera mantem ao seguir. Guardado aqui porque ler
-    // mapa.getZoom() a cada quadro cancelaria qualquer voo em andamento.
+    /* Duas liberdades independentes. Arrastar o mapa solta o enquadramento;
+       girar solta o rumo. Assim dá para girar a cena e continuar seguindo o
+       caminhante, que é o que se quer ao examinar uma encosta. */
+    this.centralizar = true;
+    this.rumoAuto = true;
+    /* Enquanto o marcador está sendo arrastado a câmera fica imóvel: se ela
+       recentralizasse, o mapa se moveria sob o cursor e o arrasto entraria
+       numa realimentação que corre até a ponta da etapa. */
+    this.arrastandoMarcador = false;
+
     this.zoom = ZOOM;
     this.cameraOcupada = false;
 
-    // enquanto um voo (easeTo/fitBounds) acontece, o seguidor fica quieto
     mapa.on("moveend", () => { this.cameraOcupada = false; });
-    mapa.on("zoomend", (ev) => {
-      if (ev.originalEvent) this.zoom = mapa.getZoom();
-    });
+    mapa.on("zoomend", (ev) => { if (ev.originalEvent) this.zoom = mapa.getZoom(); });
+
+    // Só gestos do usuário soltam a câmera; os voos do próprio site não.
+    mapa.on("dragstart", (ev) => { if (ev.originalEvent) this.soltar("centralizar"); });
+    mapa.on("rotatestart", (ev) => { if (ev.originalEvent) this.soltar("rumo"); });
+    mapa.on("pitchstart", (ev) => { if (ev.originalEvent) this.soltar("rumo"); });
   }
 
   get dia() { return this.dias[this.indiceDia]; }
   get duracaoDia() { return this.dia.t[this.dia.t.length - 1]; }
+  get cameraLivre() { return !this.centralizar || !this.rumoAuto; }
 
-  /** Posiciona a câmera no início de uma etapa, olhando na direção da trilha. */
+  soltar(qual) {
+    if (qual === "centralizar") this.centralizar = false;
+    else this.rumoAuto = false;
+    this.ganchos.aoMudarCamera?.(this.cameraLivre);
+  }
+
+  /** Volta a seguir o caminhante, reaproximando sem solavanco. */
+  retomarCamera() {
+    this.centralizar = true;
+    this.rumoAuto = true;
+    this.zoom = ZOOM;
+    const e = estadoEm(this.dia, this.tempo);
+    this.cameraOcupada = true;
+    this.mapa.easeTo({
+      center: [e.lon, e.lat],
+      zoom: ZOOM, pitch: PITCH,
+      bearing: this.rumoDaTrilha(this.dia, e),
+      duration: 900, essential: true,
+    });
+    this.ganchos.aoMudarCamera?.(false);
+  }
+
+  /**
+   * Direção geral do trecho: tangente entre um ponto atrás e um à frente.
+   * Perto do fim os dois pontos se encontram, e aí o rumo anterior vale mais
+   * do que um ângulo calculado sobre poucos metros.
+   */
+  rumoDaTrilha(d, e) {
+    const a = indicePorDistancia(d.dist, Math.max(0, e.dist - OLHAR_ATRAS));
+    const b = indicePorDistancia(d.dist, e.dist + OLHAR_ADIANTE);
+    if (d.dist[b] - d.dist[a] < 25) return this.rumoAtual;
+    return rumo(d.lon[a], d.lat[a], d.lon[b], d.lat[b]);
+  }
+
   prepararEtapa(indice, aproximar = true) {
     this.indiceDia = indice;
     this.tempo = 0;
@@ -112,7 +198,10 @@ export class Reprodutor {
     });
     desenharAte(this.mapa, d, 0);
 
-    this.rumoAtual = rumo(d.lon[0], d.lat[0], d.lon[Math.min(12, d.lon.length - 1)], d.lat[Math.min(12, d.lat.length - 1)]);
+    this.centralizar = true;
+    this.rumoAuto = true;
+    this.ganchos.aoMudarCamera?.(false);
+    this.rumoAtual = this.rumoDaTrilha(d, estadoEm(d, 0));
 
     if (aproximar) {
       this.cameraOcupada = true;
@@ -140,12 +229,12 @@ export class Reprodutor {
 
       if (this.tempo >= this.duracaoDia) {
         this.tempo = this.duracaoDia;
-        this.atualizar();
+        this.atualizar(dt);
         this.pausar();
         this.concluirEtapa();
         return;
       }
-      this.atualizar();
+      this.atualizar(dt);
       this.quadro = requestAnimationFrame(passo);
     };
     this.quadro = requestAnimationFrame(passo);
@@ -161,52 +250,54 @@ export class Reprodutor {
   alternar() { this.tocando ? this.pausar() : this.tocar(); }
 
   /** Recalcula posição, câmera e avisa quem escuta. */
-  atualizar() {
+  atualizar(dt = 1 / 60) {
     const d = this.dia;
     const e = estadoEm(d, this.tempo);
     desenharAte(this.mapa, d, e.fracao);
 
-    if (this.seguirCamera && !this.cameraOcupada) {
-      const alvo = this.olharAdiante(d, e);
-      this.rumoAtual = misturarAngulo(this.rumoAtual, alvo, SUAVIZACAO_RUMO);
-      this.mapa.jumpTo({
-        center: [e.lon, e.lat],
-        bearing: this.rumoAtual,
-        pitch: PITCH,
-        zoom: this.zoom,
-      });
+    if (!this.cameraOcupada && !this.arrastandoMarcador
+        && (this.centralizar || this.rumoAuto)) {
+      const camera = { pitch: this.mapa.getPitch(), zoom: this.mapa.getZoom() };
+
+      if (this.centralizar) {
+        camera.center = [e.lon, e.lat];
+        camera.zoom = this.zoom;
+        camera.pitch = PITCH;
+      }
+      if (this.rumoAuto) {
+        const alvo = this.rumoDaTrilha(d, e);
+        const delta = difAngulo(this.rumoAtual, alvo);
+        // Abaixo da zona morta a câmera fica parada; acima, gira devagar e
+        // com teto de velocidade, para o movimento não embrulhar.
+        if (Math.abs(delta) > ZONA_MORTA) {
+          const teto = GIRO_MAXIMO * Math.max(dt, 1 / 120) * (this.velocidade / 60);
+          const passo = Math.sign(delta) * Math.min(Math.abs(delta) * 0.04, teto);
+          this.rumoAtual = (this.rumoAtual + passo + 360) % 360;
+        }
+        camera.bearing = this.rumoAtual;
+      }
+      this.mapa.jumpTo(camera);
     }
     this.ganchos.aoQuadro?.(d, e);
   }
 
-  /** Rumo apontando para um ponto adiante na trilha, para a câmera não tremer. */
-  olharAdiante(d, e) {
-    const limite = e.dist + OLHAR_ADIANTE;
-    let k = e.i;
-    while (k < d.dist.length - 1 && d.dist[k] < limite) k += 1;
-    if (k === e.i) k = Math.min(e.i + 1, d.lon.length - 1);
-    return rumo(e.lon, e.lat, d.lon[k], d.lat[k]);
-  }
-
   concluirEtapa() {
     const d = this.dia;
-    const coords = d.lon.map((lon, i) => [lon, d.lat[i]]);
-    const limites = coords.reduce(
-      (acc, c) => [
-        Math.min(acc[0], c[0]), Math.min(acc[1], c[1]),
-        Math.max(acc[2], c[0]), Math.max(acc[3], c[1]),
+    const limites = d.lon.reduce(
+      (acc, lon, i) => [
+        Math.min(acc[0], lon), Math.min(acc[1], d.lat[i]),
+        Math.max(acc[2], lon), Math.max(acc[3], d.lat[i]),
       ],
       [Infinity, Infinity, -Infinity, -Infinity],
     );
     this.cameraOcupada = true;
     this.mapa.fitBounds(limites, {
       padding: { top: 80, bottom: 120, left: 80, right: 80 },
-      pitch: 48, duration: 2200, essential: true,
+      pitch: 46, duration: 2200, essential: true,
     });
     this.ganchos.aoConcluirEtapa?.(d, this.indiceDia === this.dias.length - 1);
   }
 
-  /** Avança para a próxima etapa, se houver. */
   proximaEtapa() {
     if (this.indiceDia >= this.dias.length - 1) return false;
     this.prepararEtapa(this.indiceDia + 1);
@@ -214,10 +305,11 @@ export class Reprodutor {
   }
 
   /** Salta para um ponto qualquer da travessia. */
-  irPara(indiceDia, tempo) {
+  irPara(indiceDia, tempo, { manterCamera = false } = {}) {
     const tocava = this.tocando;
     if (tocava) this.pausar();
-    this.cameraOcupada = false;   // um salto manual interrompe qualquer voo
+    this.cameraOcupada = false;
+
     if (indiceDia !== this.indiceDia) {
       this.indiceDia = indiceDia;
       destacarFantasma(this.mapa, this.dias, this.dia.n);
@@ -228,8 +320,12 @@ export class Reprodutor {
       this.ganchos.aoTrocarEtapa?.(this.dia);
     }
     this.tempo = Math.max(0, Math.min(tempo, this.duracaoDia));
-    const e = estadoEm(this.dia, this.tempo);
-    this.rumoAtual = this.olharAdiante(this.dia, e);
+
+    // Num salto grande o rumo vai direto ao alvo: interpolar daria um giro
+    // longo e sem sentido.
+    if (!manterCamera && this.rumoAuto) {
+      this.rumoAtual = this.rumoDaTrilha(this.dia, estadoEm(this.dia, this.tempo));
+    }
     this.atualizar();
     if (tocava) this.tocar();
   }

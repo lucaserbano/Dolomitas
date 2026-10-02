@@ -16,6 +16,13 @@ Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 
 ---
 
+## Estado das mídias
+
+| Etapa | Fotos | Vídeos | No repositório | No bucket |
+|-------|-------|--------|----------------|-----------|
+| 1 · Braies → Sennes | 84 | 38 | 55 MB | 261 MB |
+| 2 a 6 | — | — | — | — |
+
 ## Rodar na sua máquina
 
 ```bash
@@ -126,8 +133,29 @@ volta tudo para dentro do repositório.
 **Onde hospedar.** O [Cloudflare R2][r2] é a melhor opção para este caso:
 10 GB de armazenamento na camada gratuita e, o que mais importa aqui,
 **sem cobrança de banda de saída** — vídeo é justamente onde a banda pesa. O
-[Backblaze B2][b2] também serve. Em qualquer um deles, libere o CORS para o
-domínio do site, senão o navegador recusa o vídeo.
+[Backblaze B2][b2] também serve.
+
+> **O endereço da API S3 não serve aqui.** O que o painel do R2 mostra como
+> *S3 API* (`https://<conta>.r2.cloudflarestorage.com/<bucket>`) exige
+> requisição assinada; o navegador não assina nada ao carregar um `<video>`,
+> e a resposta é `400 InvalidArgument: Authorization`. O endereço que o site
+> precisa é um destes dois:
+>
+> - **Domínio público de desenvolvimento** — no bucket, em
+>   *Settings → Public Development URL → Enable*. Sai algo como
+>   `https://pub-<hash>.r2.dev`. Serve para começar, mas a Cloudflare
+>   limita a taxa e desaconselha para uso definitivo.
+> - **Domínio próprio** — *Settings → Custom Domains*, apontando por exemplo
+>   `midias.seusite.com` para o bucket. É o caminho recomendado: sem limite
+>   de taxa e com cache da CDN.
+>
+> Com o endereço em mãos, basta reapontar; nada é reconvertido:
+> ```bash
+> python3 scripts/build_media.py --videos-em "https://pub-xxxx.r2.dev"
+> ```
+
+Em qualquer hospedagem, libere o **CORS** para o domínio do site, senão o
+navegador recusa o vídeo.
 
 Se um vídeo não carregar, o site mostra o poster com uma explicação em vez
 de um quadro preto.

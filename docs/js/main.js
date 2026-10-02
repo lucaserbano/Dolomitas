@@ -3,7 +3,7 @@
  */
 
 import { criarMapa, ativarTerreno, adicionarTrilhas, adicionarRefugios, maplibregl } from "./map.js";
-import { Reprodutor, estadoEm } from "./animation.js";
+import { Reprodutor, estadoEm, tempoMaisProximo } from "./animation.js";
 import { Galeria } from "./media.js";
 import * as hud from "./hud.js";
 
@@ -69,9 +69,41 @@ async function iniciar() {
   /* ---------------------------------------------------- marcador do caminhante */
   const alfinete = document.createElement("div");
   alfinete.className = "caminhante";
-  const marcadorCaminhante = new maplibregl.Marker({ element: alfinete })
+  const marcadorCaminhante = new maplibregl.Marker({
+    element: alfinete,
+    draggable: true,          // arrastar o ponto retrocede ou avança a etapa
+  })
     .setLngLat([dias[0].lon[0], dias[0].lat[0]])
     .addTo(mapa);
+
+  let arrastandoPonto = false;
+  marcadorCaminhante.on("dragstart", () => {
+    arrastandoPonto = true;
+    reprodutor.arrastandoMarcador = true;
+    alfinete.classList.add("arrastando");
+    if (reprodutor.tocando) {
+      reprodutor.pausar();
+      reprodutor.retomaAposArrasto = true;
+    }
+    galeria.fechar();
+  });
+  marcadorCaminhante.on("drag", () => {
+    const p = marcadorCaminhante.getLngLat();
+    // O ponto gruda na trilha: solto no relevo ele perderia o sentido.
+    reprodutor.irPara(reprodutor.indiceDia,
+                      tempoMaisProximo(reprodutor.dia, p.lng, p.lat),
+                      { manterCamera: true });
+  });
+  marcadorCaminhante.on("dragend", () => {
+    arrastandoPonto = false;
+    reprodutor.arrastandoMarcador = false;
+    alfinete.classList.remove("arrastando");
+    galeria.redefinirApos(reprodutor.dia.n, reprodutor.tempo);
+    if (reprodutor.retomaAposArrasto) {
+      reprodutor.retomaAposArrasto = false;
+      reprodutor.tocar();
+    }
+  });
 
   /* ------------------------------------------------------------- reprodutor */
   const galeria = new Galeria(mapa, midias, {
@@ -93,13 +125,17 @@ async function iniciar() {
     aoTrocarEtapa: (dia) => {
       hud.trocarEtapa(dia);
       galeria.fechar();
+      galeria.ajustarPinos(dia.n);
     },
     aoQuadro: (dia, estado) => {
       hud.atualizarMedidas(dia, estado, acumulado[reprodutor.indiceDia]);
-      hud.atualizarLinhaTempo(reprodutor.indiceDia, estado.t);
-      marcadorCaminhante.setLngLat([estado.lon, estado.lat]);
+      hud.atualizarLinhaTempo(reprodutor.indiceDia, estado.t, arrastandoScrub);
+      if (!arrastandoPonto) {
+        marcadorCaminhante.setLngLat([estado.lon, estado.lat]);
+      }
       galeria.verificar(dia, estado.t);
     },
+    aoMudarCamera: (livre) => { $("#btn-recentrar").hidden = !livre; },
     aoMudarEstado: (tocando) => {
       $(".icone-tocar").dataset.estado = tocando ? "tocando" : "pausado";
       $("#btn-tocar").setAttribute("aria-label", tocando ? "Pausar" : "Retomar");
@@ -111,12 +147,16 @@ async function iniciar() {
     },
   });
 
-  hud.construirLinhaTempo(dias, midias, (indice, tempo) => {
+  let arrastandoScrub = false;
+  const scrub = hud.construirLinhaTempo(dias, midias, (indice, tempo) => {
     $("#resumo").hidden = true;
-    galeria.fechar();
+    if (galeria.ativa) galeria.fechar();
     galeria.redefinirApos(dias[indice].n, tempo);
-    reprodutor.irPara(indice, tempo);
+    reprodutor.irPara(indice, tempo, { manterCamera: arrastandoScrub });
   });
+  scrub.addEventListener("pointerdown", () => { arrastandoScrub = true; });
+  ["pointerup", "pointercancel", "blur"].forEach((ev) =>
+    scrub.addEventListener(ev, () => { arrastandoScrub = false; }));
 
   /* ---------------------------------------------------------------- controles */
   $("#btn-comecar").addEventListener("click", () => {
@@ -158,17 +198,28 @@ async function iniciar() {
     });
   });
 
-  // arrastar na linha do tempo: a câmera para de seguir enquanto se mexe no mapa
-  mapa.on("dragstart", () => { reprodutor.seguirCamera = false; });
-  mapa.on("zoomstart", (e) => { if (e.originalEvent) reprodutor.seguirCamera = false; });
-  $("#btn-tocar").addEventListener("dblclick", () => { reprodutor.seguirCamera = true; });
+  $("#btn-recentrar").addEventListener("click", () => reprodutor.retomarCamera());
 
   document.addEventListener("keydown", (ev) => {
     if (ev.target.matches("input, button")) return;
-    if (ev.code === "Space") { ev.preventDefault(); reprodutor.alternar(); }
+    if (ev.code === "Space") { ev.preventDefault(); reprodutor.alternar(); return; }
+    // setas movem a etapa em passos de um minuto de caminhada
+    const passo = ev.shiftKey ? 600 : 60;
+    if (ev.code === "ArrowLeft" || ev.code === "ArrowRight") {
+      ev.preventDefault();
+      const dir = ev.code === "ArrowRight" ? 1 : -1;
+      $("#resumo").hidden = true;
+      reprodutor.irPara(reprodutor.indiceDia, reprodutor.tempo + dir * passo,
+                        { manterCamera: true });
+      galeria.redefinirApos(reprodutor.dia.n, reprodutor.tempo);
+    }
   });
 
   window.addEventListener("resize", () => mapa.resize());
+
+  // Ponto de inspeção no console do navegador: útil para conferir a câmera
+  // e saltar para um trecho sem depender da interface.
+  window.dolomitas = { mapa, reprodutor, galeria, dias };
 }
 
 iniciar();

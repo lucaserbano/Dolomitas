@@ -130,21 +130,45 @@ function moverCursor(fracao) {
 /* ------------------------------------------------------- linha do tempo */
 
 let faixas = [];
+let duracoes = [];
+let duracaoTotal = 0;
+
+/** Converte uma fração da travessia inteira em (etapa, segundos). */
+export function fracaoParaPosicao(fracao) {
+  let restante = Math.max(0, Math.min(1, fracao)) * duracaoTotal;
+  for (let i = 0; i < duracoes.length; i += 1) {
+    if (restante <= duracoes[i] || i === duracoes.length - 1) {
+      return { dia: i, tempo: Math.min(restante, duracoes[i]) };
+    }
+    restante -= duracoes[i];
+  }
+  return { dia: 0, tempo: 0 };
+}
+
+/** O caminho inverso, para manter o controle deslizante em sincronia. */
+export function posicaoParaFracao(indiceDia, tempo) {
+  let antes = 0;
+  for (let i = 0; i < indiceDia; i += 1) antes += duracoes[i];
+  return duracaoTotal ? (antes + tempo) / duracaoTotal : 0;
+}
 
 export function construirLinhaTempo(dias, midias, aoBuscar) {
   const trilho = $("#trilho");
+  const scrub = $("#scrub");
   trilho.innerHTML = "";
+  const alca = document.createElement("div");
+  alca.className = "alca-tempo";
+  alca.id = "alca-tempo";
   faixas = [];
-
-  const totalDuracao = dias.reduce((s, d) => s + d.t[d.t.length - 1], 0);
+  duracoes = dias.map((d) => d.t[d.t.length - 1]);
+  duracaoTotal = duracoes.reduce((a, b) => a + b, 0);
 
   dias.forEach((dia, i) => {
-    const dur = dia.t[dia.t.length - 1];
+    const dur = duracoes[i];
     const el = document.createElement("div");
     el.className = "faixa";
-    el.style.flex = `${dur / totalDuracao}`;
+    el.style.flex = `${dur / duracaoTotal}`;
     el.style.setProperty("--cor", dia.cor);
-    el.title = `Etapa ${dia.n} · ${dia.de} → ${dia.para}`;
 
     const feito = document.createElement("div");
     feito.className = "faixa-feito";
@@ -169,23 +193,40 @@ export function construirLinhaTempo(dias, midias, aoBuscar) {
       el.appendChild(marca);
     });
 
-    el.addEventListener("click", (ev) => {
-      const r = el.getBoundingClientRect();
-      aoBuscar(i, ((ev.clientX - r.left) / r.width) * dur);
-    });
-
     trilho.appendChild(el);
     faixas.push({ el, feito, dur });
   });
+  trilho.appendChild(alca);
+
+  /* O controle é um <input type="range"> de verdade, invisível por cima do
+     trilho. Sai de graça: arrastar nos dois sentidos, setas do teclado,
+     Home/End e leitura por leitor de tela — nada disso funcionaria com um
+     punhado de ouvintes de clique. */
+  // O valor é o segundo da travessia, então as setas do teclado andam meio
+  // minuto de caminhada por toque, em vez de uma fração imperceptível.
+  scrub.max = String(Math.round(duracaoTotal));
+  scrub.step = "30";
+  scrub.addEventListener("input", () => {
+    const { dia, tempo } = fracaoParaPosicao(Number(scrub.value) / duracaoTotal);
+    aoBuscar(dia, tempo);
+  });
+  return scrub;
 }
 
-export function atualizarLinhaTempo(indiceDia, tempo) {
+export function atualizarLinhaTempo(indiceDia, tempo, arrastando) {
   faixas.forEach((f, i) => {
-    const completo = i < indiceDia;
     f.el.classList.toggle("atual", i === indiceDia);
-    const pct = completo ? 100 : i === indiceDia ? (tempo / f.dur) * 100 : 0;
+    const pct = i < indiceDia ? 100 : i === indiceDia ? (tempo / f.dur) * 100 : 0;
     f.feito.style.width = `${Math.max(0, Math.min(100, pct))}%`;
   });
+  const fracao = posicaoParaFracao(indiceDia, tempo);
+  const alca = $("#alca-tempo");
+  if (alca) alca.style.left = `${fracao * 100}%`;
+  if (!arrastando) {
+    const scrub = $("#scrub");
+    const v = String(Math.round(fracao * duracaoTotal));
+    if (scrub.value !== v) scrub.value = v;
+  }
 }
 
 /* -------------------------------------------------------- card de etapa */

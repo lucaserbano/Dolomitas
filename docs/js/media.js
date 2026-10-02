@@ -45,7 +45,22 @@ export class Galeria {
       const marcador = new maplibregl.Marker({ element: el })
         .setLngLat([m.lon, m.lat])
         .addTo(this.mapa);
-      this.pinos.set(m.id, { el, marcador });
+      this.pinos.set(m.id, { el, marcador, dia: m.dia });
+    });
+
+    // São centenas de pinos ao longo da travessia. Mostrados todos de uma
+    // vez, eles viram uma faixa pontilhada que esconde a própria trilha.
+    this.mapa.on("zoom", () => this.ajustarPinos());
+    this.ajustarPinos();
+  }
+
+  /** Só a etapa em curso mostra pinos, e só com zoom suficiente. */
+  ajustarPinos(diaAtual = this.diaAtual) {
+    this.diaAtual = diaAtual;
+    const perto = this.mapa.getZoom() >= 12.5;
+    this.pinos.forEach(({ el, dia }) => {
+      const mostrar = perto && (diaAtual === undefined || dia === diaAtual);
+      el.style.display = mostrar ? "" : "none";
     });
   }
 
@@ -68,6 +83,11 @@ export class Galeria {
     if (this.ativa?.id === m.id) return;
     this.ativa = m;
     this.vistas.add(m.id);
+
+    // o painel reserva a proporção exata antes de a mídia chegar
+    const quadro = this.painel.querySelector(".midia-quadro");
+    if (m.w && m.h) quadro.style.setProperty("--prop", `${m.w} / ${m.h}`);
+    else quadro.style.removeProperty("--prop");
 
     this.conteudo.replaceChildren(this.montar(m));
     this.hora.textContent = m.hora;

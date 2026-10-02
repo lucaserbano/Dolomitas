@@ -40,7 +40,7 @@ LARGURA_MINIATURA = 480
 ALTURA_MAX_VIDEO = 1080
 QUALIDADE_FOTO = 80       # WebP: ~40% menor que JPEG na mesma qualidade visual
 QUALIDADE_MINIATURA = 74
-CRF_VIDEO = 26            # maior = menor arquivo; 26 e um bom meio-termo
+CRF_VIDEO = 28            # maior = menor arquivo; 28 serve bem a fonte 4K
 
 # O GitHub Pages recomenda ate 1 GB por site e bloqueia arquivos acima de
 # 100 MB. Avisamos bem antes de chegar la.
@@ -168,8 +168,10 @@ def meta_por_ffprobe(caminho):
         for k, v in (fluxo.get("tags") or {}).items():
             tags.setdefault(k, v)
 
+    # A ordem importa: creation_time e reescrita quando o arquivo e copiado,
+    # enquanto com.apple.quicktime.creationdate guarda a captura de verdade.
     quando = None
-    for chave in ("creation_time", "com.apple.quicktime.creationdate"):
+    for chave in ("com.apple.quicktime.creationdate", "creation_time"):
         if chave in tags:
             texto = str(tags[chave]).strip().replace("Z", "+00:00")
             try:
@@ -216,11 +218,17 @@ def gerar_foto(origem, destino, largura, qualidade):
         return True
     ext = os.path.splitext(origem)[1].lower()
 
+    # O sips le HEIC mas nao escreve WebP, entao passamos por um JPEG
+    # temporario e deixamos a Pillow fazer a compressao final.
+    temporario = None
     if ext in (".heic", ".heif"):
-        _rodar(["sips", "-s", "format", "webp",
-                "-s", "formatOptions", str(qualidade),
-                "-Z", str(largura), origem, "--out", destino])
-        return os.path.exists(destino)
+        temporario = destino + ".tmp.jpg"
+        _rodar(["sips", "-s", "format", "jpeg", "-s", "formatOptions", "92",
+                "-Z", str(largura), origem, "--out", temporario])
+        if not os.path.exists(temporario):
+            print(f"    ! sips nao converteu {os.path.basename(origem)}")
+            return False
+        origem = temporario
 
     try:
         from PIL import Image, ImageOps
@@ -237,6 +245,9 @@ def gerar_foto(origem, destino, largura, qualidade):
     except Exception as erro:
         print(f"    ! falha ao converter {os.path.basename(origem)}: {erro}")
         return False
+    finally:
+        if temporario and os.path.exists(temporario):
+            os.remove(temporario)
 
 
 def gerar_video(origem, destino, poster):
@@ -244,8 +255,9 @@ def gerar_video(origem, destino, poster):
     if not os.path.exists(destino):
         r = subprocess.run([
             "ffmpeg", "-y", "-loglevel", "error", "-i", origem,
-            "-vf", f"scale='min(iw,trunc(ih*16/9/2)*2)':'min({ALTURA_MAX_VIDEO},ih)'"
-                   f":force_original_aspect_ratio=decrease:force_divisible_by=2",
+            "-vf", (f"scale='min({ALTURA_MAX_VIDEO * 16 // 9},iw)'"
+                    f":'min({ALTURA_MAX_VIDEO},ih)'"
+                    f":force_original_aspect_ratio=decrease:force_divisible_by=2"),
             "-c:v", "libx264", "-preset", "slow", "-crf", str(CRF_VIDEO),
             "-pix_fmt", "yuv420p", "-movflags", "+faststart",
             "-c:a", "aac", "-b:a", "128k", destino,
@@ -285,35 +297,81 @@ def gerar_poster(video, poster):
     return os.path.exists(poster)
 
 
+def dimensoes(caminho):
+    """Largura e altura do arquivo ja convertido, para o painel do site
+    poder reservar exatamente a proporcao da midia."""
+    ext = os.path.splitext(caminho)[1].lower()
+    if ext in (".mp4", ".mov"):
+        saida = _rodar(["ffprobe", "-v", "quiet", "-select_streams", "v:0",
+                        "-show_entries", "stream=width,height",
+                        "-of", "csv=p=0:s=x", caminho])
+        try:
+            w, h = saida.strip().split("x")[:2]
+            return int(w), int(h)
+        except (ValueError, IndexError):
+            return None, None
+    try:
+        from PIL import Image
+        with Image.open(caminho) as img:
+            return img.width, img.height
+    except Exception:
+        return None, None
+
+
 # ------------------------------------------------------------- ancoragem
 
+# Fotos tiradas antes de ligar o relogio (no cafe da manha) e depois de
+# chega-lo (no refugio) fazem parte da etapa. Em vez de descarta-las, elas
+# sao presas ao primeiro ou ao ultimo ponto do trajeto daquele dia.
+MARGEM_ANTES = 4 * 3600
+MARGEM_DEPOIS = 10 * 3600
+
+
 def localizar_no_trajeto(dias, epoch):
-    """Encontra o dia e o indice imediatamente anterior ao instante dado."""
+    """Encontra o dia e a posicao correspondentes ao instante dado.
+
+    Escolhe a etapa cujo intervalo esta mais proximo do instante, para que
+    uma foto da noite nao caia na etapa do dia seguinte por engano.
+    """
+    candidatos = []
     for dia in dias:
         t0 = dia["resumo"]["inicioUTC"]
+        fim = dia["t"][-1]
         rel = epoch - t0
-        if rel < -300 or rel > dia["t"][-1] + 300:
+        if rel < -MARGEM_ANTES or rel > fim + MARGEM_DEPOIS:
             continue
-        rel = max(0.0, min(rel, dia["t"][-1]))
-        ts = dia["t"]
-        lo, hi = 0, len(ts) - 1
-        while hi - lo > 1:
-            meio = (lo + hi) // 2
-            if ts[meio] <= rel:
-                lo = meio
-            else:
-                hi = meio
-        intervalo = ts[hi] - ts[lo]
-        f = (rel - ts[lo]) / intervalo if intervalo > 0 else 0.0
-        mistura = lambda c: c[lo] + f * (c[hi] - c[lo])
-        return dia, rel, {
-            "lon": round(mistura(dia["lon"]), 6),
-            "lat": round(mistura(dia["lat"]), 6),
-            "ele": round(mistura(dia["ele"])),
-            "dist": round(mistura(dia["dist"])),
-            "gain": round(mistura(dia["gain"])),
-        }
-    return None, None, None
+        distancia = 0 if 0 <= rel <= fim else (abs(rel) if rel < 0 else rel - fim)
+        candidatos.append((distancia, dia, rel))
+
+    if not candidatos:
+        return None, None, None, None
+    _, dia, rel = min(candidatos, key=lambda c: c[0])
+
+    if rel < 0:
+        fase = "antes"
+    elif rel > dia["t"][-1]:
+        fase = "depois"
+    else:
+        fase = "trajeto"
+    rel = max(0.0, min(rel, dia["t"][-1]))
+    ts = dia["t"]
+    lo, hi = 0, len(ts) - 1
+    while hi - lo > 1:
+        meio = (lo + hi) // 2
+        if ts[meio] <= rel:
+            lo = meio
+        else:
+            hi = meio
+    intervalo = ts[hi] - ts[lo]
+    f = (rel - ts[lo]) / intervalo if intervalo > 0 else 0.0
+    mistura = lambda c: c[lo] + f * (c[hi] - c[lo])
+    return dia, rel, fase, {
+        "lon": round(mistura(dia["lon"]), 6),
+        "lat": round(mistura(dia["lat"]), 6),
+        "ele": round(mistura(dia["ele"])),
+        "dist": round(mistura(dia["dist"])),
+        "gain": round(mistura(dia["gain"])),
+    }
 
 
 def formatar_duracao(segundos):
@@ -322,8 +380,16 @@ def formatar_duracao(segundos):
     return f"{h}h{m:02d}" if h else f"{m} min"
 
 
-def montar_legenda(rel, estado):
-    """Tempo de atividade + ganho de elevacao + distancia no dia."""
+def montar_legenda(rel, estado, fase, dia):
+    """Tempo de atividade + ganho de elevacao + distancia no dia.
+
+    Fora do trajeto essas tres medidas nao dizem nada (seriam todas zero,
+    ou todas o total do dia), entao a legenda vira a situacao do momento.
+    """
+    if fase == "antes":
+        return f"Antes da partida, em {dia['de']}"
+    if fase == "depois":
+        return f"Na chegada, em {dia['para']}"
     km = f"{estado['dist'] / 1000:.1f}".replace(".", ",")   # separador pt-BR
     return (f"{formatar_duracao(rel)} de caminhada  ·  "
             f"+{estado['gain']} m  ·  "
@@ -462,7 +528,7 @@ def main():
     print(f"Encontradas {len(arquivos)} midias.\n")
     itens, sem_ancora = [], []
 
-    for caminho in arquivos:
+    for indice, caminho in enumerate(arquivos, 1):
         nome = os.path.basename(caminho)
         ext = os.path.splitext(nome)[1].lower()
         ehvideo = ext in EXT_VIDEO
@@ -474,7 +540,7 @@ def main():
         if quando.tzinfo is None:
             quando = quando.replace(tzinfo=fuso)
 
-        dia, rel, estado = localizar_no_trajeto(dias, quando.timestamp())
+        dia, rel, fase, estado = localizar_no_trajeto(dias, quando.timestamp())
         if dia is None:
             sem_ancora.append((nome, f"fora do periodo ({quando:%d/%m %H:%M})"))
             continue
@@ -501,6 +567,9 @@ def main():
             gerar_foto(caminho, os.path.join(DIR_SAIDA, thumb),
                        LARGURA_MINIATURA, QUALIDADE_MINIATURA)
 
+        larg, alt = dimensoes(destino_video if ehvideo and base_videos
+                              else os.path.join(DIR_SAIDA, arq))
+
         # Distancia entre o GPS do arquivo e o ponto do trajeto, quando houver.
         desvio = None
         if local:
@@ -516,14 +585,18 @@ def main():
             "src": (f"{base_videos}/{arq}" if (ehvideo and base_videos)
                     else f"media/{arq}"),
             "thumb": f"media/{thumb}",
+            "w": larg, "h": alt,
             "lon": estado["lon"], "lat": estado["lat"], "ele": estado["ele"],
             "dist": estado["dist"], "gain": estado["gain"],
-            "legenda": montar_legenda(rel, estado),
+            "legenda": montar_legenda(rel, estado, fase, dia),
+            "fase": fase,
             "hora": quando.astimezone(fuso).strftime("%H:%M"),
             "desvioGps": desvio,
             "original": nome,
         })
-        print(f"  dia {dia['n']}  {formatar_duracao(rel):>7}  {nome}")
+        marca = {"antes": "  ←partida", "depois": "  chegada→"}.get(fase, "")
+        print(f"  [{indice:3d}/{len(arquivos)}] dia {dia['n']}  "
+              f"{formatar_duracao(rel):>7}{marca:>10}  {nome}")
 
     itens.sort(key=lambda m: (m["dia"], m["t"]))
     with open(os.path.join(DIR_DADOS, "media.json"), "w", encoding="utf-8") as fh:

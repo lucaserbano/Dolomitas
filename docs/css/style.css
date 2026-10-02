@@ -459,8 +459,11 @@ button, input { font: inherit; color: inherit; }
   max-height: calc(100% - 2 * var(--e4));
   width: min(38vw, 440px);
   margin: 0;
-  display: flex;
-  flex-direction: column;
+  /* Grade em vez de flex: a faixa da imagem precisa de altura definida para
+     que o max-height dela resolva. Com flex de altura indefinida a foto
+     transbordava e passava por baixo da legenda. */
+  display: grid;
+  grid-template-rows: auto auto;
   background: color-mix(in oklab, var(--noite) 95%, transparent);
   backdrop-filter: blur(16px);
   border: 1px solid var(--fio-forte);
@@ -474,17 +477,27 @@ button, input { font: inherit; color: inherit; }
 }
 
 .midia-quadro {
-  flex: 0 1 auto;
+  position: relative;
+  /* A faixa toma a proporção da própria mídia, informada pelo media.json.
+     Assim o painel abraça uma foto deitada em vez de deixar tarja preta,
+     e continua cabendo na tela quando a foto é bem vertical. */
+  aspect-ratio: var(--prop, 3 / 2);
+  max-height: 100%;
   min-height: 0;
-  display: grid;
-  place-items: center;
+  overflow: hidden;
   background: var(--abismo);
-  padding: var(--e2);
 }
 #midia-conteudo { display: contents; }
+
+/* Posição absoluta de propósito: num grid, o max-height percentual da
+   imagem não resolve (a altura da faixa ainda é indefinida na hora do
+   cálculo) e a foto vazava por baixo da legenda. Preso às quatro bordas,
+   o tamanho passa a ser definido e o object-fit mantém a proporção. */
 .midia-quadro img, .midia-quadro video {
-  max-width: 100%;
-  max-height: 100%;
+  position: absolute;
+  inset: var(--e2);
+  width: calc(100% - 2 * var(--e2));
+  height: calc(100% - 2 * var(--e2));
   object-fit: contain;
   display: block;
 }
@@ -509,7 +522,6 @@ button, input { font: inherit; color: inherit; }
 .midia-fechar:hover { background: var(--brasa); color: var(--noite); border-color: var(--brasa); }
 
 .midia-legenda {
-  flex: none;
   padding: var(--e3) var(--e4);
   border-top: 1px solid var(--fio);
   font-size: 0.8125rem;
@@ -528,15 +540,18 @@ button, input { font: inherit; color: inherit; }
 
 /* marcador de mídia sobre o mapa */
 .pino {
-  width: 13px; height: 13px;
+  position: relative;
+  z-index: 3;
+  width: 9px; height: 9px;
   border-radius: 50%;
   background: var(--brasa);
-  border: 2px solid var(--noite);
+  border: 1.5px solid var(--noite);
+  opacity: 0.6;                 /* discretos: a trilha vem primeiro */
   cursor: pointer;
-  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 220ms;
 }
-.pino:hover { transform: scale(1.45); }
-.pino.ativo { background: var(--areia); box-shadow: 0 0 0 6px color-mix(in oklab, var(--areia) 26%, transparent); }
+.pino:hover { transform: scale(1.8); opacity: 1; }
+.pino.ativo { opacity: 1; transform: scale(1.3); background: var(--areia); box-shadow: 0 0 0 6px color-mix(in oklab, var(--areia) 26%, transparent); }
 
 /* etiqueta de refúgio */
 .refugio {
@@ -743,13 +758,15 @@ button, input { font: inherit; color: inherit; }
   .perfil { padding: var(--e3) var(--e4) var(--e4); }
   #perfil-svg { height: 64px; }
 
-  /* a mídia sobe como folha a partir da base do mapa */
+  /* A mídia sobe como folha. Presa à janela, e não à área do mapa: em pé o
+     mapa ocupa pouca altura e a foto ficava reduzida a uma tarja. */
   .midia {
+    position: fixed;
     right: var(--e2); left: var(--e2);
     top: auto;
-    bottom: var(--e2);
+    bottom: calc(var(--e2) + env(safe-area-inset-bottom));
     width: auto;
-    max-height: min(72%, calc(100% - 2 * var(--e2)));
+    max-height: 76vh;
     animation-name: folha-sobe;
   }
   @keyframes folha-sobe {
@@ -908,4 +925,89 @@ button, input { font: inherit; color: inherit; }
   max-width: 34ch;
   font-size: 0.8125rem;
   color: var(--tinta-fraca);
+}
+
+/* ============================================================
+   Navegação na linha do tempo
+   ============================================================ */
+
+/* As faixas são só desenho: quem recebe o ponteiro é o <input type="range">
+   invisível por cima, que dá arrasto nos dois sentidos e teclado de graça. */
+.faixa { pointer-events: none; cursor: default; }
+
+#scrub {
+  z-index: 3;
+  cursor: grab;
+  touch-action: pan-y;
+}
+#scrub:active { cursor: grabbing; }
+
+/* Alça visível, já que o polegar nativo está invisível. */
+.alca-tempo {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--tinta);
+  pointer-events: none;
+  z-index: 2;
+}
+.alca-tempo::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 11px;
+  height: 11px;
+  translate: -50% 0;
+  rotate: 45deg;
+  background: var(--cor-dia, var(--areia));
+  border: 1.5px solid var(--abismo);
+}
+#scrub:focus-visible ~ .linha-tempo-trilho .alca-tempo::after,
+.linha-tempo:hover .alca-tempo::after { scale: 1.2; }
+.alca-tempo::after { transition: scale 180ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* ============================================================
+   Câmera solta
+   ============================================================ */
+
+.botao-recentrar {
+  position: absolute;
+  z-index: 11;
+  left: 50%;
+  top: var(--e4);
+  translate: -50% 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.55em 1.1em;
+  background: color-mix(in oklab, var(--noite) 92%, transparent);
+  backdrop-filter: blur(10px);
+  color: var(--areia);
+  border: 1px solid var(--fio-forte);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  animation: surgir 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: background var(--transicao), color var(--transicao);
+}
+.botao-recentrar:hover { background: var(--areia); color: var(--noite); }
+@keyframes surgir {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* O caminhante fica acima dos pinos de mídia: eles se acumulam ao longo da
+   trilha e, sem isto, enterram justamente o ponto que se quer ver e arrastar. */
+.caminhante { cursor: grab; pointer-events: auto; z-index: 6; }
+.caminhante:active { cursor: grabbing; }
+.caminhante.arrastando { scale: 1.25; }
+
+@media (orientation: portrait), (max-width: 760px) {
+  .botao-recentrar { top: var(--e2); font-size: 0.6875rem; padding: 0.5em 0.9em; }
 }
