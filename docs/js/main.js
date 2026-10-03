@@ -69,10 +69,10 @@ async function iniciar() {
     pronto = true;
   });
 
-  /* ---------------------------------------------------- marcador do caminhante */
+  /* ---------------------------------------------------- marcador do trilheiro */
   const alfinete = document.createElement("div");
-  alfinete.className = "caminhante";
-  const marcadorCaminhante = new maplibregl.Marker({
+  alfinete.className = "trilheiro";
+  const marcadorTrilheiro = new maplibregl.Marker({
     element: alfinete,
     draggable: true,          // arrastar o ponto retrocede ou avança a etapa
   })
@@ -80,7 +80,7 @@ async function iniciar() {
     .addTo(mapa);
 
   let arrastandoPonto = false;
-  marcadorCaminhante.on("dragstart", () => {
+  marcadorTrilheiro.on("dragstart", () => {
     arrastandoPonto = true;
     reprodutor.arrastandoMarcador = true;
     alfinete.classList.add("arrastando");
@@ -90,14 +90,14 @@ async function iniciar() {
     }
     galeria.fechar();
   });
-  marcadorCaminhante.on("drag", () => {
-    const p = marcadorCaminhante.getLngLat();
+  marcadorTrilheiro.on("drag", () => {
+    const p = marcadorTrilheiro.getLngLat();
     // O ponto gruda na trilha: solto no relevo ele perderia o sentido.
     reprodutor.irPara(reprodutor.indiceDia,
                       tempoMaisProximo(reprodutor.dia, p.lng, p.lat),
                       { manterCamera: true });
   });
-  marcadorCaminhante.on("dragend", () => {
+  marcadorTrilheiro.on("dragend", () => {
     arrastandoPonto = false;
     reprodutor.arrastandoMarcador = false;
     alfinete.classList.remove("arrastando");
@@ -116,11 +116,12 @@ async function iniciar() {
     const zero = { top: 0, right: 0, bottom: 0, left: 0 };
 
     const aplicar = () => {
-      if (!aberto) return mapa.setPadding(zero);
+      // No teatro o mapa tem faixa própria: nada o cobre, nada a compensar.
+      if (!aberto || galeria.teatro) return mapa.setPadding(zero);
 
       /* Mede a invasão real do painel sobre o canvas, em vez de supor pela
          orientação: em pé o painel é uma folha que mal encosta no mapa, e um
-         palpite alto jogava o caminhante para fora da tela. */
+         palpite alto jogava o trilheiro para fora da tela. */
       const m = $("#mapa").getBoundingClientRect();
       const p = $("#midia").getBoundingClientRect();
       const sobreporDireita = Math.max(0, m.right - p.left + 16);
@@ -154,6 +155,15 @@ async function iniciar() {
       $("#resumo").hidden = true;
       reprodutor.irPara(reprodutor.indiceDia, m.t, { manterCamera: true });
     },
+    /* O palco troca de forma: o canvas mudou de tamanho e o MapLibre só
+       descobre isso quando avisado. O enquadramento é refeito em seguida,
+       já com o padding certo para o modo novo. */
+    aoTeatro: () => {
+      requestAnimationFrame(() => {
+        mapa.resize();
+        ajustarEnquadramento(!!galeria.ativa);
+      });
+    },
   });
 
   const reprodutor = new Reprodutor(mapa, dias, {
@@ -166,7 +176,7 @@ async function iniciar() {
       hud.atualizarMedidas(dia, estado, acumulado[reprodutor.indiceDia]);
       hud.atualizarLinhaTempo(reprodutor.indiceDia, estado.t, arrastandoScrub);
       if (!arrastandoPonto) {
-        marcadorCaminhante.setLngLat([estado.lon, estado.lat]);
+        marcadorTrilheiro.setLngLat([estado.lon, estado.lat]);
       }
       galeria.verificar(dia, estado.t);
     },
@@ -244,7 +254,7 @@ async function iniciar() {
   $("#btn-recentrar").addEventListener("click", () => reprodutor.retomarCamera());
 
   // Girar pela roda solta o rumo automático; o enquadramento continua
-  // seguindo o caminhante, só para de girar sozinho.
+  // seguindo o trilheiro, só para de girar sozinho.
   instalarRoda(mapa, () => reprodutor.soltar("rumo"));
 
   document.addEventListener("keydown", (ev) => {
@@ -252,6 +262,12 @@ async function iniciar() {
     if (alvo instanceof Element
         && alvo.matches('input, button, select, textarea, [role="slider"]')) return;
     if (ev.code === "Space") { ev.preventDefault(); reprodutor.alternar(); return; }
+    // "T" abre e fecha o teatro, desde que haja mídia para ocupá-lo.
+    if (ev.code === "KeyT" && galeria.ativa) {
+      ev.preventDefault();
+      galeria.alternarTeatro();
+      return;
+    }
     if (ev.code !== "ArrowLeft" && ev.code !== "ArrowRight") return;
     ev.preventDefault();
     const dir = ev.code === "ArrowRight" ? 1 : -1;
@@ -268,6 +284,7 @@ async function iniciar() {
   });
 
   window.addEventListener("resize", () => {
+    if (galeria.teatro) galeria.reajustarFaixa();
     mapa.resize();
     if (galeria.ativa) requestAnimationFrame(() => ajustarEnquadramento(true));
   });

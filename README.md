@@ -349,6 +349,23 @@ trilhas quentes sobressaiam.
 A linha cresce sem recriar geometria — o avanço só reescreve a expressão de
 `line-gradient`, que corta a linha via `line-progress`.
 
+**Modo teatro.** Por padrão a foto abre num painel de canto e o mapa continua
+sendo o assunto. O botão de cantos no alto da mídia — ou a tecla `T` — inverte
+isso: a mídia passa a ocupar o palco, uma tira com as miniaturas da etapa
+aparece embaixo dela e o mapa vira uma faixa no rodapé, com um divisor que se
+arrasta. É o arranjo do Street View, e serve para quando se está olhando as
+fotos, não percorrendo o trajeto.
+
+O palco troca de uma moldura com coisas soltas por cima para uma grade de
+quatro linhas, e cada elemento é preso à sua linha pelo nome — a ordem no HTML
+é outra, porque fora do teatro a mídia flutua. Fechar a mídia sai do teatro:
+sem foto ele não teria assunto.
+
+A roda da bússola e o "seguir o trilheiro" continuam no ar, agora pendurados
+na borda de cima da faixa do mapa em vez da do palco: são absolutos, e sem
+reancorar iriam parar sobre a foto. A roda encolhe para 60 px, o menor disco
+em que a agulha e o N ainda não se encostam.
+
 Dados de relevo: [Mapterhorn][mt] (sem necessidade de chave de API).
 
 [ml]: https://maplibre.org/maplibre-gl-js/docs/

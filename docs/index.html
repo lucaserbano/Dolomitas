@@ -97,6 +97,15 @@
   </aside>
 
   <main id="palco">
+    <!-- tira de miniaturas e divisor: só aparecem no modo teatro -->
+    <div id="tira" class="tira" role="group" aria-label="Mídias da etapa"></div>
+
+    <div id="divisor" class="divisor" role="separator" tabindex="0"
+         aria-label="Altura do mapa" aria-orientation="horizontal"
+         title="Arraste para mudar a altura do mapa">
+      <i aria-hidden="true"></i>
+    </div>
+
     <div id="mapa"></div>
 
     <div id="roda" class="roda" role="slider" tabindex="0"
@@ -111,7 +120,7 @@
     </div>
 
     <button id="btn-recentrar" class="botao-recentrar" type="button" hidden>
-      <span aria-hidden="true">◎</span> Seguir o caminhante
+      <span aria-hidden="true">◎</span> Seguir o trilheiro
     </button>
 
     <!-- resumo ao fim de cada etapa -->
@@ -135,6 +144,11 @@
 
     <!-- foto ou vídeo do trecho -->
     <figure id="midia" class="midia" hidden>
+      <button id="midia-teatro" class="midia-teatro" type="button"
+              aria-pressed="false" aria-label="Ver em tela cheia"
+              title="Ver em tela cheia (T)">
+        <span class="midia-teatro-icone" aria-hidden="true"></span>
+      </button>
       <button id="midia-fechar" class="midia-fechar" type="button" aria-label="Fechar mídia">&times;</button>
       <div class="midia-quadro"><div id="midia-conteudo"></div></div>
       <figcaption class="midia-legenda">
@@ -167,7 +181,7 @@
         <span class="interruptor-texto">Mídias</span>
       </label>
 
-      <label class="interruptor" title="Com a rotação desligada a câmera segue o caminhante sem girar">
+      <label class="interruptor" title="Com a rotação desligada a câmera segue o trilheiro sem girar">
         <input id="tgl-girar" type="checkbox" checked>
         <span class="interruptor-pista" aria-hidden="true"><i></i></span>
         <span class="interruptor-texto">Girar</span>

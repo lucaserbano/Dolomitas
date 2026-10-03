@@ -827,10 +827,10 @@ button, input { font: inherit; color: inherit; }
 }
 
 /* ============================================================
-   Marcador do caminhante
+   Marcador do trilheiro
    ============================================================ */
 
-.caminhante {
+.trilheiro {
   width: 15px;
   height: 15px;
   border-radius: 50%;
@@ -841,7 +841,7 @@ button, input { font: inherit; color: inherit; }
 }
 
 /* halo que respira, para o olho achar o ponto no relevo */
-.caminhante::after {
+.trilheiro::after {
   content: "";
   position: absolute;
   inset: -7px;
@@ -857,7 +857,7 @@ button, input { font: inherit; color: inherit; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .caminhante::after { animation: none; }
+  .trilheiro::after { animation: none; }
 }
 
 /* os controles nativos do MapLibre precisam enxergar sobre o fundo escuro */
@@ -1007,11 +1007,11 @@ button, input { font: inherit; color: inherit; }
   to   { opacity: 1; transform: none; }
 }
 
-/* O caminhante fica acima dos pinos de mídia: eles se acumulam ao longo da
+/* O trilheiro fica acima dos pinos de mídia: eles se acumulam ao longo da
    trilha e, sem isto, enterram justamente o ponto que se quer ver e arrastar. */
-.caminhante { cursor: grab; pointer-events: auto; z-index: 6; }
-.caminhante:active { cursor: grabbing; }
-.caminhante.arrastando { scale: 1.25; }
+.trilheiro { cursor: grab; pointer-events: auto; z-index: 6; }
+.trilheiro:active { cursor: grabbing; }
+.trilheiro.arrastando { scale: 1.25; }
 
 @media (orientation: portrait), (max-width: 760px) {
   .botao-recentrar { top: var(--e2); font-size: 0.6875rem; padding: 0.5em 0.9em; }
@@ -1174,4 +1174,241 @@ button, input { font: inherit; color: inherit; }
   .roda-agulha { top: 7px; border-bottom-width: 12px; border-left-width: 4px; border-right-width: 4px; }
   .roda-norte { font-size: 0.5rem; bottom: 8px; }
   .roda-valor { display: none; }
+}
+
+/* ============================================================
+   MODO TEATRO
+   A mídia passa a ser o assunto e o mapa vira faixa de apoio,
+   com uma tira de miniaturas entre os dois. O palco deixa de ser
+   uma moldura com coisas soltas por cima e vira uma pilha: mídia,
+   tira, divisor, mapa. Fora deste modo nada aqui tem efeito.
+   ============================================================ */
+
+#palco {
+  --mapa-alt: clamp(150px, 26vh, 320px);
+  --tira-alt: 86px;
+}
+
+#palco.teatro {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto var(--mapa-alt);
+  background: var(--abismo);
+}
+
+/* A ordem no HTML é outra — tira, divisor, mapa e só então a mídia, que
+   fora do teatro flutua sobre tudo. Cada um ganha sua linha pelo nome.
+   Resumo, bússola e botão de recentrar são absolutos e não entram na conta. */
+#palco.teatro .midia   { grid-row: 1; }
+#palco.teatro .tira    { grid-row: 2; }
+#palco.teatro .divisor { grid-row: 3; }
+#palco.teatro #mapa    { grid-row: 4; }
+
+/* O mapa sai do inset absoluto e passa a ocupar a última faixa. */
+#palco.teatro #mapa {
+  position: relative;
+  inset: auto;
+  min-height: 0;
+  border-top: 1px solid var(--fio);
+}
+
+/* Bússola e botão de recentrar continuam valendo — girar o mapa e voltar a
+   seguir o trilheiro são justamente o que salva uma vista ruim. Os dois são
+   absolutos dentro do palco, que no teatro é alto: sem reancorar, iriam
+   parar em cima da foto. A borda de cima da faixa do mapa está a
+   100% - var(--mapa-alt) do topo, e é dali que eles se penduram. */
+#palco.teatro .botao-recentrar {
+  top: calc(100% - var(--mapa-alt) + var(--e2));
+  bottom: auto;
+}
+/* A faixa é baixa: a roda encolhe para caber sem engolir o mapa. */
+#palco.teatro .roda {
+  left: var(--e2);
+  bottom: var(--e2);
+  width: 60px;
+  gap: 0.2em;
+}
+/* 60px é o menor disco em que a agulha e o N ainda não se encostam: a
+   agulha mede 17px a partir dos 11px do topo, e o N fica a 12px da base. */
+#palco.teatro .roda-disco { width: 60px; height: 60px; }
+
+/* ── a mídia ocupando o palco ───────────────────────────── */
+#palco.teatro .midia {
+  /* relativo, não estático: o fechar e o botão de teatro se penduram nele,
+     e com position:static iriam parar no canto do palco. */
+  position: relative;
+  width: auto;
+  max-height: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: var(--abismo);
+  backdrop-filter: none;
+  animation: teatro-entra 320ms ease both;
+  /* legenda e setas dividem a mesma faixa de rodapé */
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+@keyframes teatro-entra {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+#palco.teatro .midia-quadro {
+  grid-area: 1 / 1 / 2 / 3;
+  aspect-ratio: auto;
+  height: auto;
+  background: var(--abismo);
+}
+#palco.teatro .midia-legenda {
+  grid-area: 2 / 1;
+  font-size: 0.875rem;
+}
+#palco.teatro .midia-passos {
+  grid-area: 2 / 2;
+  border-top: 1px solid var(--fio);
+}
+
+/* ── botão de entrar e sair do teatro ───────────────────── */
+.midia-teatro {
+  position: absolute;
+  z-index: 2;
+  top: var(--e2);
+  right: calc(var(--e2) + 34px + var(--e1));
+  width: 34px; height: 34px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--abismo) 78%, transparent);
+  color: var(--tinta);
+  border: 1px solid var(--fio);
+  border-radius: var(--curva);
+  cursor: pointer;
+  transition: background var(--transicao), color var(--transicao);
+}
+.midia-teatro:hover {
+  background: var(--areia); color: var(--noite); border-color: var(--areia);
+}
+/* dois cantos opostos, como as marcas de corte de uma prova */
+.midia-teatro-icone {
+  width: 15px; height: 15px;
+  background:
+    linear-gradient(currentColor, currentColor) 0 0 / 7px 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 0 / 1.5px 7px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 100% / 7px 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 100% / 1.5px 7px no-repeat;
+}
+/* no teatro as marcas apontam para dentro: o gesto é recolher */
+.midia-teatro[aria-pressed="true"] .midia-teatro-icone {
+  background:
+    linear-gradient(currentColor, currentColor) 0 100% / 7px 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 100% / 1.5px 7px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 0 / 7px 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 0 / 1.5px 7px no-repeat;
+}
+
+/* ── tira de miniaturas ─────────────────────────────────── */
+.tira { display: none; }
+
+#palco.teatro .tira {
+  display: flex;
+  gap: 2px;
+  height: var(--tira-alt);
+  padding: var(--e2);
+  background: var(--noite);
+  border-top: 1px solid var(--fio);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--fio-forte) transparent;
+}
+.tira::-webkit-scrollbar { height: 6px; }
+.tira::-webkit-scrollbar-thumb {
+  background: var(--fio-forte); border-radius: 3px;
+}
+
+.tira-item {
+  position: relative;
+  flex: none;
+  width: 104px;
+  height: 100%;
+  padding: 0;
+  background: var(--abismo);
+  border: 1px solid transparent;
+  border-radius: var(--curva);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 200ms, opacity 200ms;
+  opacity: 0.62;
+}
+.tira-item:hover { opacity: 1; border-color: var(--fio-forte); }
+.tira-item[aria-current="true"] {
+  opacity: 1;
+  border-color: var(--areia);
+}
+.tira-item img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* hora em tarja, legível sobre qualquer foto */
+.tira-hora {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 2px 5px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+  background: linear-gradient(transparent, color-mix(in oklab, var(--abismo) 92%, transparent) 55%);
+  text-align: right;
+}
+.tira-item[aria-current="true"] .tira-hora { color: var(--areia); }
+/* marca de vídeo: um triângulo, nada mais */
+.tira-video::before {
+  content: "";
+  position: absolute;
+  top: 5px; left: 6px;
+  width: 0; height: 0;
+  border-left: 8px solid var(--tinta);
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  filter: drop-shadow(0 0 2px var(--abismo));
+}
+.tira-item[aria-current="true"].tira-video::before { border-left-color: var(--areia); }
+
+/* ── divisor arrastável ─────────────────────────────────── */
+.divisor { display: none; }
+
+#palco.teatro .divisor {
+  display: grid;
+  place-items: center;
+  height: 11px;
+  background: var(--noite);
+  cursor: ns-resize;
+  touch-action: none;
+}
+#palco.teatro .divisor i {
+  width: 42px; height: 3px;
+  border-radius: 2px;
+  background: var(--fio-forte);
+  transition: background 200ms;
+}
+#palco.teatro .divisor:hover i,
+#palco.teatro .divisor:focus-visible i { background: var(--areia); }
+#palco.teatro.redimensionando { user-select: none; }
+
+/* Em pé sobra pouca altura: o mapa e a tira encolhem para a foto
+   continuar sendo o assunto. */
+@media (orientation: portrait), (max-width: 760px) {
+  #palco {
+    --mapa-alt: clamp(110px, 20vh, 220px);
+    --tira-alt: 68px;
+  }
+  #palco.teatro .tira-item { width: 78px; }
+  #palco.teatro .midia-legenda { padding: var(--e2) var(--e3); font-size: 0.8125rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #palco.teatro .midia { animation: none; }
 }

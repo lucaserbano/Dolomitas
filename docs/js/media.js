@@ -30,6 +30,14 @@ export class Galeria {
     this.legenda = document.querySelector('[data-campo="mLegenda"]');
     this.contador = document.querySelector('[data-campo="mContador"]');
 
+    // Modo teatro: a mídia toma o palco e o mapa vira faixa embaixo.
+    this.teatro = false;
+    this.palco = document.getElementById("palco");
+    this.tira = document.getElementById("tira");
+    this.botaoTeatro = document.getElementById("midia-teatro");
+    this.botaoTeatro.addEventListener("click", () => this.alternarTeatro());
+    this.instalarDivisor();
+
     document.getElementById("midia-fechar")
       .addEventListener("click", () => this.fechar());
 
@@ -67,6 +75,131 @@ export class Galeria {
   ajustarPinos(diaAtual = this.diaAtual) {
     this.diaAtual = diaAtual;
     filtrarPinos(this.mapa, diaAtual);
+    if (this.teatro) this.montarTira();
+  }
+
+  /* ---------------------------------------------------------- teatro */
+
+  alternarTeatro(ligado = !this.teatro) {
+    if (ligado === this.teatro) return;
+    this.teatro = ligado;
+    this.palco.classList.toggle("teatro", ligado);
+    this.botaoTeatro.setAttribute("aria-pressed", String(ligado));
+    this.botaoTeatro.setAttribute(
+      "aria-label", ligado ? "Sair da tela cheia" : "Ver em tela cheia");
+
+    if (ligado) {
+      this.montarTira();
+      this.reajustarFaixa();
+    } else {
+      this.tira.replaceChildren();
+    }
+
+    // A mídia foi medida para o painel de canto; no teatro quem manda é a grade.
+    if (this.ativa) this.ajustarLargura(this.ativa);
+    this.ganchos.aoTeatro?.(ligado);
+  }
+
+  /**
+   * Tira de miniaturas da etapa, na ordem em que as mídias foram feitas.
+   * É a única maneira de ver o que existe sem percorrer o dia inteiro.
+   */
+  montarTira() {
+    const lista = this.doDia;
+    this.tira.replaceChildren(...lista.map((m) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = m.tipo === "video" ? "tira-item tira-video" : "tira-item";
+      b.setAttribute("aria-current", String(this.ativa?.id === m.id));
+      b.dataset.id = m.id;
+
+      const img = document.createElement("img");
+      img.src = m.thumb;
+      img.alt = "";
+      img.loading = "lazy";       // uma etapa tem mais de cem miniaturas
+      img.decoding = "async";
+
+      const hora = document.createElement("span");
+      hora.className = "tira-hora";
+      hora.textContent = m.hora;
+
+      b.append(img, hora);
+      b.addEventListener("click", () => {
+        if (this.ativa?.id === m.id) return;
+        this.abrir(m, true);
+        this.ganchos.aoPular?.(m);
+      });
+      return b;
+    }));
+    this.realcarTira();
+  }
+
+  /** Marca a miniatura em exibição e a traz para a vista. */
+  realcarTira() {
+    if (!this.teatro) return;
+    let alvo = null;
+    for (const b of this.tira.children) {
+      const eu = b.dataset.id === this.ativa?.id;
+      b.setAttribute("aria-current", String(eu));
+      if (eu) alvo = b;
+    }
+    alvo?.scrollIntoView({ block: "nearest", inline: "center",
+                           behavior: "smooth" });
+  }
+
+  /**
+   * Divisor entre a tira e o mapa. A altura vive numa variável do palco,
+   * para o CSS continuar dono da grade; o mapa só precisa ser avisado.
+   */
+  instalarDivisor() {
+    const divisor = document.getElementById("divisor");
+    const limites = () => {
+      const alturaPalco = this.palco.getBoundingClientRect().height;
+      return [110, Math.max(140, alturaPalco * 0.6)];
+    };
+    const aplicar = (px) => {
+      const [min, max] = limites();
+      this.palco.style.setProperty(
+        "--mapa-alt", `${Math.round(Math.min(max, Math.max(min, px)))}px`);
+      this.mapa.resize();
+    };
+    /* A altura arrastada fica em pixels e sobrevive à janela mudando de
+       tamanho. Numa janela menor ela sufocaria a mídia, então o teatro
+       reaplica o valor pelo mesmo limite ao entrar e a cada redimensionamento. */
+    this.reajustarFaixa = () => {
+      const guardado = this.palco.style.getPropertyValue("--mapa-alt");
+      if (guardado) aplicar(parseFloat(guardado));
+    };
+
+    let arrastando = false;
+    divisor.addEventListener("pointerdown", (ev) => {
+      if (!this.teatro) return;
+      arrastando = true;
+      divisor.setPointerCapture(ev.pointerId);
+      this.palco.classList.add("redimensionando");
+      ev.preventDefault();
+    });
+    divisor.addEventListener("pointermove", (ev) => {
+      if (!arrastando) return;
+      aplicar(this.palco.getBoundingClientRect().bottom - ev.clientY);
+    });
+    const soltar = () => {
+      if (!arrastando) return;
+      arrastando = false;
+      this.palco.classList.remove("redimensionando");
+    };
+    divisor.addEventListener("pointerup", soltar);
+    divisor.addEventListener("pointercancel", soltar);
+
+    // Teclado: o divisor é um separator, e setas são o gesto esperado dele.
+    divisor.addEventListener("keydown", (ev) => {
+      if (!this.teatro) return;
+      const passo = ev.key === "ArrowUp" ? 24 : ev.key === "ArrowDown" ? -24 : 0;
+      if (!passo) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      aplicar(this.mapa.getContainer().getBoundingClientRect().height + passo);
+    });
   }
 
   /** Mídias da etapa em curso, na ordem em que foram feitas. */
@@ -132,6 +265,7 @@ export class Galeria {
 
     this.realcar(anterior, false);
     this.realcar(m, true);
+    this.realcarTira();
     this.ganchos.aoAbrir?.(m, manual);
   }
 
@@ -143,7 +277,9 @@ export class Galeria {
   ajustarLargura(m) {
     this.painel.style.removeProperty("width");
     this.quadro.style.removeProperty("height");
-    if (!m.w || !m.h) return;
+    // No teatro a mídia preenche a célula da grade: medir em pixels aqui só
+    // serviria para brigar com o CSS.
+    if (this.teatro || !m.w || !m.h) return;
 
     const proporcao = m.w / m.h;
     const folha = window.matchMedia(
@@ -237,6 +373,8 @@ export class Galeria {
     if (!this.ativa) return;
     const fechada = this.ativa;
     this.ativa = null;
+    // Sem mídia o teatro não tem assunto: fechar é sair dele.
+    if (this.teatro) this.alternarTeatro(false);
     this.painel.hidden = true;
     this.conteudo.replaceChildren();
     this.realcar(fechada, false);

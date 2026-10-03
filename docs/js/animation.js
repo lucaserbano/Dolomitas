@@ -2,7 +2,7 @@
  * Motor de reprodução: relógio virtual, interpolação do estado e câmera.
  *
  * A posição e todas as métricas saem da mesma série temporal, interpoladas
- * pelo tempo corrido. A câmera voa atrás do caminhante.
+ * pelo tempo corrido. A câmera voa atrás do trilheiro.
  */
 
 import { desenharAte, destacarFantasma } from "./map.js";
@@ -81,7 +81,7 @@ export function tempoNaDistancia(dia, alvo) {
 
 /**
  * Tempo da etapa cujo ponto está mais próximo de uma coordenada.
- * Usado ao arrastar o marcador do caminhante sobre o mapa.
+ * Usado ao arrastar o marcador do trilheiro sobre o mapa.
  */
 export function tempoMaisProximo(dia, lon, lat) {
   const escala = Math.cos((lat * Math.PI) / 180);
@@ -127,11 +127,11 @@ export class Reprodutor {
 
     /* Duas liberdades independentes. Arrastar o mapa solta o enquadramento;
        girar solta o rumo. Assim dá para girar a cena e continuar seguindo o
-       caminhante, que é o que se quer ao examinar uma encosta. */
+       trilheiro, que é o que se quer ao examinar uma encosta. */
     this.centralizar = true;
     this.rumoAuto = true;
     /* Preferência do usuário: com a rotação desligada a câmera continua
-       acompanhando o caminhante, mas sem girar a cena. */
+       acompanhando o trilheiro, mas sem girar a cena. */
     this.rotacao = true;
     /* Enquanto o marcador está sendo arrastado a câmera fica imóvel: se ela
        recentralizasse, o mapa se moveria sob o cursor e o arrasto entraria
@@ -160,7 +160,7 @@ export class Reprodutor {
     this.ganchos.aoMudarCamera?.(this.cameraLivre);
   }
 
-  /** Volta a seguir o caminhante, reaproximando sem solavanco. */
+  /** Volta a seguir o trilheiro, reaproximando sem solavanco. */
   retomarCamera() {
     this.centralizar = true;
     this.rumoAuto = true;

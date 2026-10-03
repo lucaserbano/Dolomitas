@@ -3,7 +3,7 @@
  *
  * Serve para contornar uma crista que esconde o traçado: gira-se a cena até
  * a trilha reaparecer. Arrastar a roda solta o rumo automático — a câmera
- * continua acompanhando o caminhante, só para de girar sozinha.
+ * continua acompanhando o trilheiro, só para de girar sozinha.
  */
 
 const PASSO_TECLADO = 5;      // graus por toque de seta
