@@ -1,0 +1,457 @@
+<title>Datar a Etapa __DIA__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap">
+<style>
+/* ============================================================
+   Mesa de datação — Alta Via 1
+   Mesmo instrumento do site: fios finos, cantos retos, números
+   tabulares. Nada de cartão solto; o que separa é a linha.
+   ============================================================ */
+:root{
+  --noite:#202c39; --ardosia:#283845;
+  --pedra:#b8b08d; --areia:#f2d492; --brasa:#f29559;
+  --abismo:#161e27; --fenda:#1b2531;
+  --tinta:#ece6d6;
+  --tinta-meia:color-mix(in oklab, var(--pedra) 72%, var(--ardosia));
+  --tinta-fraca:color-mix(in oklab, var(--pedra) 44%, var(--ardosia));
+  --fio:color-mix(in oklab, var(--pedra) 16%, transparent);
+  --fio-forte:color-mix(in oklab, var(--pedra) 30%, transparent);
+  --curva:2px;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+
+body{
+  margin:0; background:var(--abismo); color:var(--tinta);
+  font-family:"Archivo",system-ui,-apple-system,sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  padding:clamp(18px,3vw,38px) clamp(16px,3vw,38px);
+}
+:focus-visible{outline:2px solid var(--areia); outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* -------------------------------------------------- cabeçalho */
+.topo{display:flex; flex-wrap:wrap; gap:18px 28px; align-items:baseline;
+  border-bottom:1px solid var(--fio-forte); padding-bottom:14px; margin-bottom:22px}
+h1{font-size:clamp(1.45rem,3vw,2rem); font-weight:700; letter-spacing:-.02em;
+  margin:0; text-wrap:balance}
+.rota{color:var(--tinta-meia); font-variant-numeric:tabular-nums}
+.rota b{color:var(--areia); font-weight:600}
+
+.aba-barra{display:flex; gap:0; margin-bottom:20px; border-bottom:1px solid var(--fio)}
+.aba{appearance:none; background:none; border:none; color:var(--tinta-fraca);
+  font:inherit; font-weight:600; padding:10px 18px 11px; cursor:pointer;
+  border-bottom:2px solid transparent; margin-bottom:-1px; letter-spacing:.01em}
+.aba:hover{color:var(--tinta)}
+.aba[aria-selected="true"]{color:var(--areia); border-bottom-color:var(--areia)}
+.aba .conta{font-variant-numeric:tabular-nums; color:var(--tinta-fraca);
+  font-weight:400; margin-left:8px}
+
+.conduz{max-width:64ch; color:var(--tinta-meia); margin:0 0 22px}
+.conduz b{color:var(--areia); font-weight:600}
+.conduz code{font-family:ui-monospace,SFMono-Regular,monospace; font-size:.85em;
+  color:var(--pedra)}
+
+/* -------------------------------------------------- palco */
+.palco{display:grid; grid-template-columns:320px minmax(0,1fr); gap:clamp(18px,2.4vw,34px);
+  align-items:start}
+@media(max-width:900px){.palco{grid-template-columns:1fr}}
+.rotulo{font-size:.6875rem; font-weight:700; letter-spacing:.17em;
+  text-transform:uppercase; color:var(--tinta-fraca); margin:0 0 10px}
+.rotulo .dica{display:block; letter-spacing:0; text-transform:none;
+  font-weight:400; font-size:.8125rem; color:var(--tinta-fraca); margin-top:3px}
+
+.fila{display:flex; flex-direction:column; gap:1px; max-height:76vh;
+  overflow-y:auto; background:var(--fio); border:1px solid var(--fio);
+  border-radius:var(--curva)}
+.item{display:grid; grid-template-columns:30px 48px minmax(0,1fr); gap:11px;
+  align-items:center; padding:8px 9px; background:var(--noite);
+  border:none; border-left:3px solid transparent; cursor:pointer;
+  text-align:left; color:inherit; font:inherit; width:100%}
+.item:hover{background:var(--ardosia)}
+.item[aria-selected="true"]{background:var(--ardosia); border-left-color:var(--brasa)}
+.item.pronto{border-left-color:var(--areia)}
+.item img{width:48px; height:auto; display:block; border-radius:1px; background:var(--abismo)}
+.item .n{font-weight:700; color:var(--tinta-fraca); font-variant-numeric:tabular-nums;
+  text-align:right; font-size:.8125rem}
+.item[aria-selected="true"] .n{color:var(--brasa)}
+.item.pronto .n{color:var(--areia)}
+.item .meta{min-width:0}
+.item .arq{font-size:.75rem; color:var(--tinta-fraca); font-variant-numeric:tabular-nums;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.item .resp{font-size:.8125rem; font-weight:600; color:var(--areia);
+  font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap}
+.item .vazio{font-size:.8125rem; color:var(--tinta-fraca)}
+
+/* -------------------------------------------------- grades */
+.grade{display:grid; gap:12px}
+.grade-crus{grid-template-columns:repeat(auto-fill,minmax(188px,1fr))}
+.grade-canon{grid-template-columns:repeat(auto-fill,minmax(132px,1fr))}
+
+.alvo{padding:0; background:var(--noite); border:1px solid var(--fio);
+  border-radius:var(--curva); cursor:pointer; color:inherit; font:inherit;
+  text-align:left; overflow:hidden; display:flex; flex-direction:column}
+.alvo:hover{border-color:var(--areia)}
+.alvo img{width:100%; height:auto; display:block; background:var(--abismo)}
+.alvo .faixa{padding:7px 9px 8px; display:flex; flex-direction:column; gap:2px}
+.alvo .hora{font-weight:700; color:var(--areia); font-variant-numeric:tabular-nums;
+  display:flex; justify-content:space-between; gap:8px; align-items:baseline}
+.alvo .hora small{font-weight:400; font-size:.6875rem; color:var(--tinta-fraca)}
+.alvo .ctx{font-size:.75rem; color:var(--tinta-fraca); font-variant-numeric:tabular-nums}
+.alvo.usado{border-color:var(--brasa)}
+.alvo.usado .hora{color:var(--brasa)}
+.alvo.fora-de-ordem{opacity:.42}
+.alvo.fora-de-ordem:hover{opacity:1}
+.alvo .marca{font-size:.6875rem; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--brasa)}
+
+/* -------------------------------------------------- hora à mão */
+.mao{display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  padding:12px 0 16px; border-bottom:1px solid var(--fio); margin-bottom:16px}
+.mao label{color:var(--tinta-meia); font-size:.875rem}
+input[type="time"]{background:var(--noite); color:var(--tinta);
+  border:1px solid var(--fio-forte); border-radius:var(--curva);
+  padding:.45em .6em; font:inherit; font-variant-numeric:tabular-nums}
+
+/* -------------------------------------------------- saída */
+.saida{margin-top:30px; border-top:1px solid var(--fio-forte); padding-top:18px}
+.barra{display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px}
+.placar{color:var(--tinta-meia); font-size:.875rem; font-variant-numeric:tabular-nums}
+.placar b{color:var(--areia)}
+button.acao{padding:.62em 1.25em; background:var(--areia); color:var(--noite);
+  border:none; border-radius:var(--curva); font:inherit; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; font-size:.75rem; cursor:pointer}
+button.acao:hover{background:var(--brasa)}
+button.acao.fantasma{background:transparent; color:var(--tinta-meia);
+  border:1px solid var(--fio-forte)}
+button.acao.fantasma:hover{background:transparent; color:var(--tinta);
+  border-color:var(--areia)}
+textarea{width:100%; min-height:190px; background:var(--fenda); color:var(--tinta);
+  border:1px solid var(--fio); border-radius:var(--curva); padding:13px;
+  font-family:ui-monospace,SFMono-Regular,monospace; font-size:.8125rem;
+  line-height:1.65; resize:vertical}
+.aviso{color:var(--brasa); font-size:.8125rem}
+</style>
+
+<header class="topo">
+  <h1 id="titulo">Datar a etapa</h1>
+  <p class="rota" id="rota"></p>
+</header>
+
+<div class="aba-barra" role="tablist">
+  <button class="aba" role="tab" id="aba-osmo" aria-controls="painel-osmo"
+    aria-selected="true" type="button">Osmo 360<span class="conta" id="conta-osmo"></span></button>
+  <button class="aba" role="tab" id="aba-zap" aria-controls="painel-zap"
+    aria-selected="false" type="button">WhatsApp<span class="conta" id="conta-zap"></span></button>
+</div>
+
+<!-- ===================================================== Osmo -->
+<section id="painel-osmo" role="tabpanel" aria-labelledby="aba-osmo">
+  <p class="conduz">O Mimo apagou a data dos arquivos exportados — o nome deles é
+  o instante da exportação. O cartão guardou a hora de cada gravação no nome.
+  <b>Clique num exportado à esquerda e depois no clipe do cartão que é ele.</b>
+  O relógio da câmera estava adiantado; a hora grande já vem corrigida, e a
+  pequena é o que a câmera marcava.</p>
+
+  <div class="palco">
+    <section>
+      <p class="rotulo">Exportados do Mimo
+        <span class="dica">na ordem em que saíram</span></p>
+      <div class="fila" id="fila-osmo"></div>
+    </section>
+    <section>
+      <p class="rotulo" id="rotulo-crus">Clipes do cartão
+        <span class="dica">em ordem de gravação · os claros são os que cabem na ordem</span></p>
+      <div class="grade grade-crus" id="grade-crus"></div>
+    </section>
+  </div>
+</section>
+
+<!-- ===================================================== WhatsApp -->
+<section id="painel-zap" role="tabpanel" aria-labelledby="aba-zap" hidden>
+  <p class="conduz">A hora no nome destas fotos é a da <b>mensagem</b>, não a da
+  foto: todas chegaram à noite, já no refúgio, enquanto a imagem é de pleno sol.
+  Elas não trazem EXIF nenhum. <b>Escolha a foto da Canon feita no mesmo trecho</b>
+  — a hora dela é que vai valer — ou digite a hora à mão.</p>
+
+  <div class="palco">
+    <section>
+      <p class="rotulo">Fotos do WhatsApp
+        <span class="dica">na ordem em que chegaram</span></p>
+      <div class="fila" id="fila-zap"></div>
+    </section>
+    <section>
+      <div class="mao">
+        <label for="hora-mao">Hora à mão</label>
+        <input type="time" id="hora-mao" step="60">
+        <button class="acao fantasma" id="aplicar-mao" type="button">Aplicar</button>
+        <span class="aviso" id="aviso-mao"></span>
+      </div>
+      <p class="rotulo">Fotos da Canon · referência
+        <span class="dica">têm EXIF; a hora e o ponto da trilha vêm de lá</span></p>
+      <div class="grade grade-canon" id="grade-canon"></div>
+    </section>
+  </div>
+</section>
+
+<!-- ===================================================== saída -->
+<section class="saida">
+  <div class="barra">
+    <span class="placar" id="placar"></span>
+    <button class="acao" id="copiar" type="button">Copiar JSON</button>
+    <button class="acao fantasma" id="limpar" type="button">Limpar tudo</button>
+  </div>
+  <textarea id="json" readonly spellcheck="false"
+    aria-label="Conteúdo de _datas.json"></textarea>
+</section>
+
+<script src="dados.js"></script>
+<script>
+(() => {
+"use strict";
+const D = window.DADOS;
+const CHAVE = "datar-dia-" + D.dia.n;
+
+// O que o usuário decidiu: exportado -> id do clipe no cartão, e
+// foto do WhatsApp -> hora HH:MM no fuso dos Dolomitas.
+let pares = {}, horas = {};
+try {
+  const guardado = JSON.parse(localStorage.getItem(CHAVE) || "{}");
+  pares = guardado.pares || {};
+  horas = guardado.horas || {};
+} catch (e) { /* janela anônima, dados bloqueados: começa do zero */ }
+
+let aba = "osmo";
+let escolhido = { osmo: D.exportados.length ? 0 : -1,
+                  zap: D.whatsapp.length ? 0 : -1 };
+
+const $ = id => document.getElementById(id);
+const porId = Object.fromEntries(D.crus.map(c => [c.id, c]));
+
+// -------------------------------------------------------- cabeçalho
+document.title = "Datar a Etapa " + D.dia.n;
+$("titulo").textContent = "Datar a etapa " + D.dia.n;
+$("rota").innerHTML = `<b>${D.dia.de} → ${D.dia.para}</b> · ${
+  D.dia.data.split("-").reverse().join("/")} · caminhada das ${
+  D.dia.inicio} às ${D.dia.fim}`;
+
+// -------------------------------------------------------- texto auxiliar
+const minutos = h => { const [a, b] = h.split(":").map(Number); return a * 60 + b; };
+
+function contexto(c) {
+  if (!c || c.fora) {
+    return c && c.rel < 0 ? "antes de partir" : "depois de chegar";
+  }
+  const min = Math.round(c.rel / 60);
+  const t = min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")}`
+                      : `${min} min`;
+  return `${t} de caminhada · ${c.km.toFixed(1).replace(".", ",")} km · ${c.ele} m`;
+}
+
+// -------------------------------------------------------- lista da esquerda
+function desenharFila(qual) {
+  const alvo = qual === "osmo" ? $("fila-osmo") : $("fila-zap");
+  const lista = qual === "osmo" ? D.exportados : D.whatsapp;
+  alvo.replaceChildren(...lista.map((item, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "item";
+    b.setAttribute("aria-selected", String(escolhido[qual] === i));
+    let resposta = "", pronto = false;
+    if (qual === "osmo") {
+      const c = porId[pares[item.nome]];
+      pronto = !!c;
+      resposta = c ? `${c.hora} · clipe ${c.id}` : "";
+    } else {
+      pronto = !!horas[item.nome];
+      resposta = horas[item.nome] || "";
+    }
+    if (pronto) b.classList.add("pronto");
+    const legenda = qual === "osmo"
+      ? `${item.video ? "vídeo" : "foto"} · ${item.dur ? item.dur.toFixed(1).replace(".", ",") + " s" : "—"}`
+      : item.nome.slice(17, 25).replace(/-/g, ":") + " (mensagem)";
+    b.innerHTML = `<span class="n">${i + 1}</span>
+      <img src="${item.img || ""}" alt="">
+      <span class="meta">
+        ${resposta ? `<span class="resp">${resposta}</span>`
+                   : `<span class="vazio">sem data</span>`}
+        <span class="arq">${legenda}</span>
+      </span>`;
+    b.addEventListener("click", () => { escolhido[qual] = i; render(); });
+    return b;
+  }));
+}
+
+// -------------------------------------------------------- limites de ordem
+// A exportação respeita a ordem da gravação, então o clipe de um exportado
+// fica entre o do vizinho de cima e o do vizinho de baixo. Isso não bloqueia
+// nada: só apaga o que não cabe, para o olho ir direto ao que interessa.
+function faixaPermitida() {
+  const i = escolhido.osmo;
+  if (i < 0) return [-Infinity, Infinity];
+  let antes = -Infinity, depois = Infinity;
+  for (let k = i - 1; k >= 0; k--) {
+    const c = porId[pares[D.exportados[k].nome]];
+    if (c) { antes = minutos(c.hora); break; }
+  }
+  for (let k = i + 1; k < D.exportados.length; k++) {
+    const c = porId[pares[D.exportados[k].nome]];
+    if (c) { depois = minutos(c.hora); break; }
+  }
+  return [antes, depois];
+}
+
+// -------------------------------------------------------- grade do cartão
+function desenharCrus() {
+  const atual = escolhido.osmo >= 0 ? D.exportados[escolhido.osmo] : null;
+  const [antes, depois] = faixaPermitida();
+  const donos = {};
+  for (const [nome, id] of Object.entries(pares)) donos[id] = nome;
+
+  $("grade-crus").replaceChildren(...D.crus.map(c => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "alvo";
+    const m = minutos(c.hora);
+    if (m < antes || m > depois) b.classList.add("fora-de-ordem");
+    const dono = donos[c.id];
+    const meu = atual && dono === atual.nome;
+    if (dono) b.classList.add("usado");
+    b.innerHTML = `<img src="${c.img || ""}" alt="">
+      <span class="faixa">
+        <span class="hora">${c.hora}<small>câmera ${c.relogio}</small></span>
+        <span class="ctx">${contexto(c.ctx)}</span>
+        <span class="ctx">${c.video ? "vídeo · " + c.dur.toFixed(0) + " s" : "foto"} · clipe ${c.id}</span>
+        ${dono ? `<span class="marca">${meu ? "este" : "já usado · nº " +
+            (D.exportados.findIndex(e => e.nome === dono) + 1)}</span>` : ""}
+      </span>`;
+    b.addEventListener("click", () => {
+      if (!atual) return;
+      if (meu) delete pares[atual.nome];
+      else {
+        if (dono) delete pares[dono];           // um clipe só serve a um exportado
+        pares[atual.nome] = c.id;
+        avancar("osmo");
+      }
+      salvar(); render();
+    });
+    return b;
+  }));
+}
+
+// -------------------------------------------------------- grade da Canon
+function desenharCanon() {
+  $("grade-canon").replaceChildren(...D.canon.map(f => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "alvo";
+    b.innerHTML = `<img src="${f.img || ""}" alt="">
+      <span class="faixa">
+        <span class="hora">${f.hora}</span>
+        <span class="ctx">${contexto(f.ctx)}</span>
+      </span>`;
+    b.addEventListener("click", () => {
+      const w = D.whatsapp[escolhido.zap];
+      if (!w) return;
+      horas[w.nome] = f.hora;
+      avancar("zap"); salvar(); render();
+    });
+    return b;
+  }));
+}
+
+function avancar(qual) {
+  const lista = qual === "osmo" ? D.exportados : D.whatsapp;
+  const feito = qual === "osmo"
+    ? n => !!pares[n] : n => !!horas[n];
+  for (let k = escolhido[qual] + 1; k < lista.length; k++) {
+    if (!feito(lista[k].nome)) { escolhido[qual] = k; return; }
+  }
+}
+
+// -------------------------------------------------------- saída
+function montarJson() {
+  const relogio = {}, real = {};
+  for (const e of D.exportados) {
+    const c = porId[pares[e.nome]];
+    if (c) relogio[e.nome] = c.iso;
+  }
+  for (const w of D.whatsapp) {
+    if (horas[w.nome]) real[w.nome] = `${D.dia.data}T${horas[w.nome]}:00+02:00`;
+  }
+  const saida = Object.assign({}, D.existente);
+  saida._comentario = "O relogio da camera DJI estava adiantado; " +
+    "_ajuste_minutos corrige de uma vez tudo que esta em _relogio_da_camera. " +
+    "O que esta em _hora_real ja e a hora certa e nao se mexe.";
+  saida._ajuste_minutos = D.ajuste;
+  saida._relogio_da_camera = Object.assign({}, saida._relogio_da_camera, relogio);
+  saida._hora_real = Object.assign({}, saida._hora_real, real);
+  const ordem = ["_comentario", "_ajuste_minutos", "_relogio_da_camera", "_hora_real"];
+  return JSON.stringify(Object.fromEntries(ordem.map(k => [k, saida[k]])), null, 2);
+}
+
+function salvar() {
+  try { localStorage.setItem(CHAVE, JSON.stringify({ pares, horas })); }
+  catch (e) { /* sem espaço ou sem permissão: a página segue funcionando */ }
+}
+
+// -------------------------------------------------------- render
+function render() {
+  const fOsmo = D.exportados.filter(e => pares[e.nome]).length;
+  const fZap = D.whatsapp.filter(w => horas[w.nome]).length;
+  $("conta-osmo").textContent = `${fOsmo}/${D.exportados.length}`;
+  $("conta-zap").textContent = `${fZap}/${D.whatsapp.length}`;
+  $("aba-osmo").setAttribute("aria-selected", String(aba === "osmo"));
+  $("aba-zap").setAttribute("aria-selected", String(aba === "zap"));
+  $("painel-osmo").hidden = aba !== "osmo";
+  $("painel-zap").hidden = aba !== "zap";
+
+  desenharFila("osmo"); desenharFila("zap");
+  desenharCrus(); desenharCanon();
+
+  const falta = (D.exportados.length - fOsmo) + (D.whatsapp.length - fZap);
+  $("placar").innerHTML = falta
+    ? `<b>${fOsmo + fZap}</b> datados · faltam ${falta}`
+    : `<b>tudo datado</b> · ${fOsmo + fZap} arquivos`;
+  $("json").value = montarJson();
+  const w = D.whatsapp[escolhido.zap];
+  $("hora-mao").value = (w && horas[w.nome]) || "";
+}
+
+// -------------------------------------------------------- controles
+$("aba-osmo").addEventListener("click", () => { aba = "osmo"; render(); });
+$("aba-zap").addEventListener("click", () => { aba = "zap"; render(); });
+$("aplicar-mao").addEventListener("click", () => {
+  const w = D.whatsapp[escolhido.zap], v = $("hora-mao").value;
+  if (!w) return;
+  if (!v) { $("aviso-mao").textContent = "Escolha uma hora primeiro."; return; }
+  $("aviso-mao").textContent = "";
+  horas[w.nome] = v; avancar("zap"); salvar(); render();
+});
+$("copiar").addEventListener("click", async () => {
+  const b = $("copiar");
+  try { await navigator.clipboard.writeText($("json").value); b.textContent = "Copiado"; }
+  catch (e) { $("json").select(); b.textContent = "Selecionado — Cmd+C"; }
+  setTimeout(() => { b.textContent = "Copiar JSON"; }, 1800);
+});
+$("limpar").addEventListener("click", () => {
+  pares = {}; horas = {};
+  escolhido = { osmo: D.exportados.length ? 0 : -1, zap: D.whatsapp.length ? 0 : -1 };
+  salvar(); render();
+});
+document.addEventListener("keydown", ev => {
+  if (ev.target.matches("input,textarea")) return;
+  const lista = aba === "osmo" ? D.exportados : D.whatsapp;
+  if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+    const passo = ev.key === "ArrowDown" ? 1 : -1;
+    const n = escolhido[aba] + passo;
+    if (n >= 0 && n < lista.length) { escolhido[aba] = n; render(); ev.preventDefault(); }
+  }
+});
+
+render();
+})();
+</script>

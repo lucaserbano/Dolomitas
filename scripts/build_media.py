@@ -81,8 +81,49 @@ def _graus(valor, ref):
 _datas_manuais = None
 
 
+def preservar_etapas_antigas(itens):
+    """Mantem no media.json o que ja foi publicado e saiu de midias/.
+
+    As midias originais sao pesadas e vao sendo retiradas da pasta etapa a
+    etapa, enquanto os derivados ficam em docs/media/ para sempre. Sem isto,
+    rodar o script depois de esvaziar midias/ apagaria do mapa as etapas
+    anteriores. A miniatura e a prova de que a midia continua publicada.
+    """
+    caminho = os.path.join(DIR_DADOS, "media.json")
+    if not os.path.exists(caminho):
+        return 0
+    try:
+        with open(caminho, encoding="utf-8") as fh:
+            antigas = json.load(fh).get("midias", [])
+    except (json.JSONDecodeError, OSError):
+        return 0
+
+    conhecidos = {m["id"] for m in itens}
+    guardadas = 0
+    for m in antigas:
+        if m.get("id") in conhecidos:
+            continue
+        thumb = os.path.join(RAIZ, "docs", m.get("thumb", ""))
+        if m.get("thumb") and os.path.exists(thumb):
+            itens.append(m)
+            guardadas += 1
+    return guardadas
+
+
 def meta_por_tabela(caminho):
-    """Data vinda de midias/_datas.json, quando o arquivo nao tem nenhuma."""
+    """Data vinda de midias/_datas.json, quando o arquivo nao tem nenhuma.
+
+    A tabela tem duas secoes, porque as datas nao vem todas da mesma fonte:
+
+    _relogio_da_camera  horas lidas do nome do clipe no cartao. O relogio da
+                        camera pode estar adiantado ou atrasado, e so estas
+                        andam com _ajuste_minutos.
+    _hora_real          horas ja conferidas, de outra fonte — as fotos do
+                        WhatsApp, por exemplo, cuja hora veio das fotos da
+                        Canon. Nao se mexe nelas.
+
+    Nomes soltos na raiz, do formato antigo, contam como relogio de camera.
+    """
     global _datas_manuais
     if _datas_manuais is None:
         _datas_manuais = {}
@@ -92,21 +133,21 @@ def meta_por_tabela(caminho):
                     bruto = json.load(fh)
             except json.JSONDecodeError as erro:
                 raise SystemExit(f"{DATAS_MANUAIS} invalido: {erro}")
-            # O relogio da camera pode estar adiantado ou atrasado em
-            # relacao ao horario real. Esta chave desloca todas as datas do
-            # arquivo de uma vez, para acertar sem reescrever cada linha.
             ajuste = timedelta(minutes=float(bruto.get("_ajuste_minutos", 0)))
-            if ajuste:
+            se_camera = dict(bruto.get("_relogio_da_camera", {}))
+            se_camera.update({n: t for n, t in bruto.items()
+                              if not n.startswith("_")})
+            if ajuste and se_camera:
                 print(f"  (ajuste de {ajuste.total_seconds() / 60:+.0f} min "
-                      f"aplicado as datas de _datas.json)")
-            for nome, texto in bruto.items():
-                if nome.startswith("_"):      # comentarios e opcoes
-                    continue
-                try:
-                    _datas_manuais[nome] = datetime.fromisoformat(
-                        str(texto).replace("Z", "+00:00")) + ajuste
-                except ValueError:
-                    print(f"    ! data invalida para {nome}: {texto!r}")
+                      f"aplicado ao relogio da camera)")
+            for secao, desloca in ((se_camera, ajuste),
+                                   (bruto.get("_hora_real", {}), timedelta())):
+                for nome, texto in secao.items():
+                    try:
+                        _datas_manuais[nome] = datetime.fromisoformat(
+                            str(texto).replace("Z", "+00:00")) + desloca
+                    except ValueError:
+                        print(f"    ! data invalida para {nome}: {texto!r}")
             if _datas_manuais:
                 print(f"  ({len(_datas_manuais)} datas lidas de _datas.json)")
     return _datas_manuais.get(os.path.basename(caminho)), None
@@ -679,11 +720,15 @@ def main():
         print(f"  [{indice:3d}/{len(arquivos)}] dia {dia['n']}  "
               f"{formatar_duracao(rel):>7}{marca:>10}  {nome}")
 
+    guardadas = preservar_etapas_antigas(itens)
     itens.sort(key=lambda m: (m["dia"], m["t"]))
     with open(os.path.join(DIR_DADOS, "media.json"), "w", encoding="utf-8") as fh:
         json.dump({"midias": itens}, fh, ensure_ascii=False, indent=2)
 
-    print(f"\n{len(itens)} midias ancoradas no trajeto.")
+    print(f"\n{len(itens) - guardadas} midias ancoradas no trajeto.")
+    if guardadas:
+        print(f"({guardadas} de etapas anteriores mantidas: o original saiu de "
+              f"midias/, mas o arquivo publicado continua em docs/media/)")
     relatar_peso(itens, base_videos)
     distantes = [m for m in itens if m["desvioGps"] and m["desvioGps"] > 150]
     if distantes:

@@ -20,9 +20,11 @@ Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 
 | Etapa | Fotos | Vídeos | No repositório | No bucket R2 |
 |-------|-------|--------|----------------|--------------|
-| 1 · Braies → Sennes | 88 | 38 | 60 MB | 247 MB |
-| 2 · Sennes → Fanes | 71 | 15 | 52 MB | 98 MB |
-| 3 a 6 | — | — | — | — |
+| 1 · Braies → Sennes | 88 | 38 | 56 MB | 247 MB |
+| 2 · Sennes → Fanes | 71 | 15 | 57 MB | 79 MB |
+| 3 · Fanes → Lagazuoi | 90 | 36 | 52 MB | 168 MB |
+| 4 a 6 | — | — | — | — |
+| **total** | **249** | **89** | **165 MB** | **494 MB** |
 
 ### Quando o arquivo perdeu a data
 
@@ -35,14 +37,44 @@ Para esses casos, crie `midias/_datas.json` com o instante real de cada um:
 
 ```json
 {
-  "1790947806725.MOV": "2026-09-20T12:34:56+02:00",
-  "1790948047577.MOV": "2026-09-20T12:41:10+02:00"
+  "_ajuste_minutos": -54,
+  "_relogio_da_camera": {
+    "1790947806725.MOV": "2026-09-20T12:34:56+02:00",
+    "1790948047577.MOV": "2026-09-20T12:41:10+02:00"
+  },
+  "_hora_real": {
+    "PHOTO-2026-09-21-15-48-00.jpg": "2026-09-21T11:08:00+02:00"
+  }
 }
 ```
+
+São duas seções porque as horas não vêm todas da mesma fonte.
+`_relogio_da_camera` são as lidas do nome do clipe no cartão — e o relógio
+da câmera pode estar adiantado, então só essas andam com `_ajuste_minutos`.
+`_hora_real` é hora já conferida por outro caminho, e não se mexe nela.
 
 Essa tabela tem prioridade sobre qualquer metadado embutido. O próprio
 script imprime um esqueleto dela ao final, listando o que não conseguiu
 ancorar.
+
+**Para parear à mão**, que é o caminho que funciona com a Osmo 360:
+
+```bash
+python3 scripts/parear_osmo.py --dia 3 \
+    --exportados "midias/D3 Fanes-Valparola" \
+    --cartao /Volumes/Untitled/DCIM/CAM_001
+```
+
+Isso monta uma página em `pareamento/` com os exportados de um lado e os
+clipes do cartão do outro, cada um com três quadros, a hora já corrigida e
+o ponto da trilha onde você estava. Clicar num e depois no outro monta o
+`_datas.json` inteiro, pronto para copiar. Como a exportação respeita a
+ordem da gravação, a página apaga os clipes que não cabem entre os vizinhos
+já pareados — sem travar nada, só para o olho ir direto ao que interessa.
+
+A mesma página traz as fotos do WhatsApp, com as fotos da Canon do dia como
+referência de hora. Publicar essa página como artifact é o jeito mais
+confortável de usá-la; `pareamento/` fica fora do repositório.
 
 **Para preencher a tabela sozinho**, se você ainda tiver os arquivos crus:
 
@@ -76,8 +108,18 @@ Os originais são lidos onde estiverem; nada é copiado para o projeto.
 > **Fotos vindas do WhatsApp não têm EXIF nenhum** — o aplicativo apaga tudo,
 > inclusive a data. Para elas o script lê o horário do **nome do arquivo**
 > (`PHOTO-AAAA-MM-DD-HH-MM-SS.jpg`), interpretado no fuso desta máquina, que
-> foi quem exportou. Vale conferir uma ou outra pelo conteúdo: se a foto não
-> combinar com a altitude da legenda, o fuso do nome é outro.
+> foi quem salvou.
+>
+> **Mas esse horário é o da mensagem, não o da foto.** O nome bate, ao
+> segundo, com o `birthtime` do arquivo lido no fuso de São Paulo: é a hora
+> em que a mensagem chegou ao Mac, e o Mac estava em horário de Brasília.
+> Quando o grupo troca as fotos do dia só à noite — como no dia 21, em que
+> as 26 fotos chegaram entre 20h16 e 20h49 de Roma, com a imagem em pleno
+> sol — o nome marca o jantar, e não o trecho da trilha.
+>
+> Quando as duas horas coincidirem, o nome serve. Quando não, a foto entra
+> em `_hora_real`, com a hora tirada de uma foto da Canon do mesmo trecho —
+> é o que a página do `parear_osmo.py` faz.
 
 Bucket: `https://pub-b469c0ff44ae40a6b799c069e44960ef.r2.dev`
 
@@ -107,6 +149,12 @@ que erra feio entre paredes de rocha.
 
 O script avisa, ao final, quais arquivos não puderam ser posicionados e por quê.
 Ele pode ser rodado quantas vezes quiser: o que já foi convertido é reaproveitado.
+
+> **Pode esvaziar `midias/` entre as etapas.** O `media.json` é reescrito a cada
+> rodada, mas o que já foi publicado continua nele: toda entrada antiga cuja
+> miniatura ainda exista em `docs/media/` é mantida. É isso que permite tirar os
+> originais da etapa 1 do disco sem que ela suma do mapa. Para remover uma mídia
+> de verdade, apague também o arquivo dela em `docs/media/`.
 
 Opções úteis:
 
@@ -312,6 +360,7 @@ Dados de relevo: [Mapterhorn][mt] (sem necessidade de chave de API).
 relogio/          GPX e export do Apple Health (fonte)
 midias/           suas fotos e vídeos originais (não versionado)
 videos_para_subir/  vídeos convertidos, prontos para o bucket (não versionado)
+pareamento/       página de pareamento manual, gerada sob demanda (não versionado)
 scripts/          processamento em Python, sem dependências externas
 docs/             o site publicado — é esta pasta que o GitHub Pages serve
   ├── data/       JSON gerado

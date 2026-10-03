@@ -24,3 +24,8 @@ __pycache__/
 # ── Vídeos destinados à hospedagem externa (Cloudflare R2 / Backblaze B2) ──
 # São grandes demais para o repositório; sobem direto para o bucket.
 videos_para_subir/
+
+# ── Página de pareamento manual ────────────────────────────────────
+# Gerada por scripts/parear_osmo.py: alguns MB de miniaturas embutidas,
+# descartáveis assim que o _datas.json estiver preenchido.
+pareamento/

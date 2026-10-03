@@ -342,11 +342,16 @@ def main():
     if os.path.exists(destino):
         with open(destino, encoding="utf-8") as fh:
             tabela = json.load(fh)
-    tabela.update({n: d.isoformat() for n, d in achados.items()})
+    # A data sai do arquivo cru, ou seja, do relogio da camera: entra na
+    # secao que _ajuste_minutos corrige.
+    camera = tabela.setdefault("_relogio_da_camera", {})
+    camera.update({n: d.isoformat() for n, d in achados.items()})
+    for nome in [n for n in tabela if not n.startswith("_")]:
+        camera[nome] = tabela.pop(nome)          # formato antigo, na raiz
     with open(destino, "w", encoding="utf-8") as fh:
         json.dump(tabela, fh, ensure_ascii=False, indent=2, sort_keys=True)
         fh.write("\n")
-    print(f"\n{destino} agora tem {len(tabela)} datas.")
+    print(f"\n{destino} agora tem {len(camera)} datas de camera.")
     print("Rode: python3 scripts/build_media.py")
 
 
