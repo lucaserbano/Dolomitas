@@ -22,9 +22,10 @@ Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 |-------|-------|--------|----------------|--------------|
 | 1 · Braies → Sennes | 88 | 38 | 56 MB | 247 MB |
 | 2 · Sennes → Fanes | 71 | 15 | 57 MB | 79 MB |
-| 3 · Fanes → Lagazuoi | 90 | 36 | 52 MB | 168 MB |
-| 4 a 6 | — | — | — | — |
-| **total** | **249** | **89** | **165 MB** | **494 MB** |
+| 3 · Fanes → Lagazuoi | 91 | 36 | 53 MB | 168 MB |
+| 4 · Lagazuoi → Malga Giau | 67 | 27 | 30 MB | 135 MB |
+| 5 e 6 | — | — | — | — |
+| **total** | **317** | **116** | **196 MB** | **629 MB** |
 
 ### Quando o arquivo perdeu a data
 
@@ -67,14 +68,35 @@ python3 scripts/parear_osmo.py --dia 3 \
 
 Isso monta uma página em `pareamento/` com os exportados de um lado e os
 clipes do cartão do outro, cada um com três quadros, a hora já corrigida e
-o ponto da trilha onde você estava. Clicar num e depois no outro monta o
-`_datas.json` inteiro, pronto para copiar. Como a exportação respeita a
-ordem da gravação, a página apaga os clipes que não cabem entre os vizinhos
-já pareados — sem travar nada, só para o olho ir direto ao que interessa.
+o ponto da trilha onde você estava. O exportado em foco fica grande no alto
+da coluna, grudado ali enquanto a lista rola — é dele que se procura o par.
+Clicar num e depois no outro monta o `_datas.json` inteiro, pronto para
+copiar. Como a exportação respeita a ordem da gravação, a página apaga os
+clipes que não cabem entre os vizinhos já pareados — sem travar nada, só para
+o olho ir direto ao que interessa.
 
-A mesma página traz as fotos do WhatsApp, com as fotos da Canon do dia como
-referência de hora. Publicar essa página como artifact é o jeito mais
-confortável de usá-la; `pareamento/` fica fora do repositório.
+> **Os quadros do cartão são desentortados antes de virar miniatura.** O cru
+> da Osmo 360 é um par de olhos de peixe lado a lado; encolhido vira duas
+> bolhas em que não se enxerga nada. O filtro `v360` do ffmpeg reprojeta para
+> equirretangular, e um corte vertical joga fora o zênite, que é só céu, e o
+> nadir, que é o bastão:
+>
+> ```
+> v360=dfisheye:e:ih_fov=193:iv_fov=193:w=960:h=480,crop=960:300:0:90
+> ```
+>
+> Sobram 56° para cima e para baixo, onde estão os picos e a trilha. As fotos
+> `.JPG` do cartão já saem costuradas da câmera e só levam o corte.
+
+A segunda aba, **Sem data**, recebe tudo que não tem hora de captura em lugar
+nenhum — fotos do WhatsApp e arquivos que perderam o EXIF —, com as mídias
+que têm hora própria servindo de referência: clicar numa delas empresta a
+hora. Uma data fora da janela da travessia é descartada em vez de aceita: o
+Spotlight devolve a data do sistema de arquivos quando não há metadado algum,
+e isso é a hora em que o arquivo foi copiado, não em que a foto foi feita.
+
+Publicar essa página como artifact é o jeito mais confortável de usá-la;
+`pareamento/` fica fora do repositório.
 
 **Para preencher a tabela sozinho**, se você ainda tiver os arquivos crus:
 

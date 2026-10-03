@@ -43,6 +43,9 @@ RE_EXPORTADO = re.compile(r"^(\d{13})\.(MOV|JPG)$", re.I)
 RE_CARTAO = re.compile(r"^CAM_(\d{14})_(\d{4})_D\.(\w+)$", re.I)
 RE_WHATSAPP = re.compile(r"^PHOTO-(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})")
 
+EXT_FOTO = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".tif", ".tiff"}
+EXT_VIDEO = {".mov", ".mp4", ".m4v"}
+
 
 # ---------------------------------------------------------------- utilidades
 
@@ -66,15 +69,31 @@ def _jpeg(img, qualidade=72):
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def tira_do_video(caminho, instantes, larg, alt):
-    """Junta varios quadros do video numa so imagem, empilhados."""
+# O cru da Osmo 360 e um par de olhos de peixe lado a lado. Encolhido vira
+# duas bolhas em que nao se enxerga nada; o v360 do ffmpeg desentorta para
+# equirretangular. O corte vertical joga fora o zenite, que e so ceu, e o
+# nadir, que e o bastao — sobram os 56 graus para cima e para baixo, onde
+# estao os picos e a trilha.
+ALTURA_EQUI = 480
+FAIXA_EQUI = 300
+FILTRO_360 = (f"v360=dfisheye:e:ih_fov=193:iv_fov=193:w={ALTURA_EQUI * 2}:"
+              f"h={ALTURA_EQUI},"
+              f"crop={ALTURA_EQUI * 2}:{FAIXA_EQUI}:0:{(ALTURA_EQUI - FAIXA_EQUI) // 2}")
+
+
+def tira_do_video(caminho, instantes, larg, alt, antes="", lado_a_lado=False):
+    """Junta varios quadros do video numa so imagem.
+
+    `antes` e um filtro aplicado antes da escala — e por onde entra o v360.
+    """
     from PIL import Image
+    filtro = f"{antes}," if antes else ""
     quadros = []
     for t in instantes:
         bruto = rodar(["ffmpeg", "-v", "quiet", "-ss", f"{t:.2f}", "-i", caminho,
                        "-map", "0:v:0", "-frames:v", "1", "-vf",
-                       f"scale={larg}:{alt}", "-f", "image2", "-c:v", "mjpeg",
-                       "-"])
+                       f"{filtro}scale={larg}:{alt}", "-f", "image2",
+                       "-c:v", "mjpeg", "-"])
         if bruto:
             try:
                 quadros.append(Image.open(io.BytesIO(bruto)).convert("RGB"))
@@ -82,14 +101,41 @@ def tira_do_video(caminho, instantes, larg, alt):
                 pass
     if not quadros:
         return None
-    tira = Image.new("RGB", (larg, alt * len(quadros)))
+    n = len(quadros)
+    tira = Image.new("RGB", (larg * n, alt) if lado_a_lado else (larg, alt * n))
     for i, q in enumerate(quadros):
-        tira.paste(q, (0, i * alt))
+        tira.paste(q, (i * larg, 0) if lado_a_lado else (0, i * alt))
     return _jpeg(tira)
+
+
+def foto_equirect(caminho, larg, alt):
+    """Foto 360 do cartao: ja vem costurada, so falta tirar ceu e chao."""
+    from PIL import Image, ImageOps
+    try:
+        with Image.open(caminho) as img:
+            img = img.convert("RGB")
+            faixa = round(img.height * FAIXA_EQUI / ALTURA_EQUI)
+            topo = (img.height - faixa) // 2
+            img = img.crop((0, topo, img.width, topo + faixa))
+            return _jpeg(ImageOps.fit(img, (larg, alt), Image.LANCZOS))
+    except Exception as erro:
+        print(f"    ! {os.path.basename(caminho)}: {erro}")
+        return None
 
 
 def tira_da_foto(caminho, larg, alt):
     from PIL import Image, ImageOps
+    temporario = None
+    if os.path.splitext(caminho)[1].lower() in (".heic", ".heif"):
+        # A Pillow nao le HEIC sem plugin; o sips ja vem no macOS.
+        temporario = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "_heic.tmp.jpg")
+        rodar(["sips", "-s", "format", "jpeg", "-Z", str(max(larg, alt) * 2),
+               caminho, "--out", temporario])
+        if not os.path.exists(temporario):
+            print(f"    ! sips nao converteu {os.path.basename(caminho)}")
+            return None
+        caminho = temporario
     try:
         with Image.open(caminho) as img:
             img = ImageOps.exif_transpose(img).convert("RGB")
@@ -98,9 +144,60 @@ def tira_da_foto(caminho, larg, alt):
     except Exception as erro:
         print(f"    ! {os.path.basename(caminho)}: {erro}")
         return None
+    finally:
+        if temporario and os.path.exists(temporario):
+            os.remove(temporario)
 
 
-def exif_quando(caminho):
+def quando_do_arquivo(caminho, ehvideo):
+    """Instante da captura, no fuso dos Dolomitas, ou None se nao houver.
+
+    Tres fontes, na ordem em que merecem credito: o EXIF da foto, os tags do
+    video e o Spotlight, que e quem le HEIC sem plugin nenhum.
+    """
+    quando = None if ehvideo else _exif_quando(caminho)
+    if quando is None and ehvideo:
+        quando = _ffprobe_quando(caminho)
+    if quando is None:
+        quando = _mdls_quando(caminho)
+    return quando
+
+
+def _ffprobe_quando(caminho):
+    saida = rodar(["ffprobe", "-v", "quiet", "-print_format", "json",
+                   "-show_format", "-show_streams", caminho])
+    if not saida:
+        return None
+    try:
+        dados = json.loads(saida)
+    except json.JSONDecodeError:
+        return None
+    tags = dict(dados.get("format", {}).get("tags", {}))
+    for fluxo in dados.get("streams", []):
+        for k, v in (fluxo.get("tags") or {}).items():
+            tags.setdefault(k, v)
+    # creation_time e reescrita ao copiar; a chave da Apple guarda a captura.
+    for chave in ("com.apple.quicktime.creationdate", "creation_time"):
+        if chave in tags:
+            try:
+                return datetime.fromisoformat(
+                    str(tags[chave]).strip().replace("Z", "+00:00")
+                ).astimezone(FUSO)
+            except ValueError:
+                continue
+    return None
+
+
+def _mdls_quando(caminho):
+    saida = rodar(["mdls", "-name", "kMDItemContentCreationDate", "-raw", caminho])
+    try:
+        texto = saida.decode().strip()
+        return datetime.strptime(texto, "%Y-%m-%d %H:%M:%S %z").astimezone(FUSO)
+    except (UnicodeDecodeError, ValueError):
+        return None
+
+
+def _exif_quando(caminho):
     """DateTimeOriginal, ja no fuso dos Dolomitas."""
     from PIL import Image, ExifTags
     try:
@@ -135,6 +232,23 @@ def carregar_dia(n):
             if d["n"] == n:
                 return d
     raise SystemExit(f"dia {n} nao esta em {DIAS}")
+
+
+def janela_da_travessia(folga_horas=14):
+    """Do inicio do primeiro dia ao fim do ultimo, com folga para as noites.
+
+    Serve de peneira contra data que nao e de captura. O mdls devolve a data
+    do sistema de arquivos quando nao ha metadado nenhum — uma foto do
+    WhatsApp salva com outro nome sai dali com a data em que foi copiada.
+    Qualquer instante fora desta janela e lixo, nao hora de captura.
+    """
+    with open(DIAS, encoding="utf-8") as fh:
+        dias = json.load(fh)["dias"]
+    inicios = [d["resumo"]["inicioUTC"] for d in dias]
+    fins = [d["resumo"]["inicioUTC"] + d["resumo"]["dur"] for d in dias]
+    folga = timedelta(hours=folga_horas)
+    return (datetime.fromtimestamp(min(inicios), FUSO) - folga,
+            datetime.fromtimestamp(max(fins), FUSO) + folga)
 
 
 def tabela_existente():
@@ -173,36 +287,68 @@ def contexto(dia, quando):
 
 # -------------------------------------------------------------- coleta
 
+def miniatura(caminho, ehvideo, larg, alt):
+    return (tira_do_video(caminho, [duracao(caminho) * 0.3], larg, alt)
+            if ehvideo else tira_da_foto(caminho, larg, alt))
+
+
 def coletar(args, dia):
     data_cartao = dia["data"].replace("-", "")
-    exportados, whatsapp, canon = [], [], []
+    comeco, fim = janela_da_travessia()
+    exportados, sem_data, referencia, outros_dias = [], [], [], []
 
     print("Exportados do Mimo:")
     for nome in sorted(os.listdir(args.exportados)):
+        if nome.startswith("."):
+            continue
         caminho = os.path.join(args.exportados, nome)
         m = RE_EXPORTADO.match(nome)
         if m:
             video = m.group(2).upper() == "MOV"
             dur = duracao(caminho) if video else 0.0
-            tira = (tira_do_video(caminho, [dur * 0.2, dur * 0.75], 132, 234)
-                    if video else tira_da_foto(caminho, 132, 234))
+            tira = (tira_do_video(caminho, [dur * 0.2, dur * 0.75], 190, 338,
+                                  lado_a_lado=True)
+                    if video else tira_da_foto(caminho, 190, 338))
             exportados.append({"nome": nome, "video": video,
                                "dur": round(dur, 1), "img": tira})
             print(f"  {len(exportados):3d}  {nome}  {dur:5.1f}s")
             continue
-        if RE_WHATSAPP.match(nome):
-            whatsapp.append({"nome": nome, "img": tira_da_foto(caminho, 190, 190)})
-            continue
-        if nome.lower().endswith((".jpg", ".jpeg")):
-            quando = exif_quando(caminho)
-            if quando and quando.strftime("%Y%m%d") == data_cartao:
-                canon.append({"nome": nome, "iso": quando.isoformat(),
-                              "hora": quando.strftime("%H:%M"),
-                              "ctx": contexto(dia, quando),
-                              "img": tira_da_foto(caminho, 190, 190)})
 
-    canon.sort(key=lambda c: c["iso"])
-    whatsapp.sort(key=lambda w: w["nome"])
+        ext = os.path.splitext(nome)[1].lower()
+        if ext not in EXT_FOTO | EXT_VIDEO:
+            continue
+        ehvideo = ext in EXT_VIDEO
+        # Nome do WhatsApp marca a chegada da mensagem, nao a captura: nunca
+        # serve de referencia e sempre precisa de hora dada a mao.
+        quando = (None if RE_WHATSAPP.match(nome)
+                  else quando_do_arquivo(caminho, ehvideo))
+        if quando is not None and not (comeco <= quando <= fim):
+            print(f"    {nome}: {quando:%d/%m/%Y %H:%M} esta fora da travessia "
+                  f"— nao e hora de captura, vai para a datacao a mao")
+            quando = None
+
+        if quando is None:
+            sem_data.append({"nome": nome, "video": ehvideo,
+                             "img": miniatura(caminho, ehvideo, 220, 220)})
+        elif quando.strftime("%Y%m%d") == data_cartao:
+            referencia.append({"nome": nome, "video": ehvideo,
+                               "iso": quando.isoformat(),
+                               "hora": quando.strftime("%H:%M"),
+                               "ctx": contexto(dia, quando),
+                               "img": miniatura(caminho, ehvideo, 220, 220)})
+        else:
+            outros_dias.append((nome, quando))
+
+    referencia.sort(key=lambda c: c["iso"])
+    sem_data.sort(key=lambda w: w["nome"])
+
+    print(f"\n{len(referencia)} midias com hora propria servem de referencia; "
+          f"{len(sem_data)} precisam de hora.")
+    if outros_dias:
+        print("\nNesta pasta, mas de outro dia (vao para a etapa certa "
+              "sozinhas, pelo horario):")
+        for nome, quando in sorted(outros_dias, key=lambda x: x[1]):
+            print(f"  {nome}: {quando:%d/%m %H:%M}")
 
     print(f"\nClipes do cartao em {dia['data']}:")
     crus, vistos = [], set()
@@ -222,8 +368,9 @@ def coletar(args, dia):
         real = relogio + timedelta(minutes=args.ajuste)
         video = ext == "LRF"
         dur = duracao(caminho) if video else 0.0
-        tira = (tira_do_video(caminho, [dur * 0.1, dur * 0.5, dur * 0.9], 260, 130)
-                if video else tira_da_foto(caminho, 260, 195))
+        tira = (tira_do_video(caminho, [dur * 0.1, dur * 0.5, dur * 0.9],
+                              520, 162, antes=FILTRO_360)
+                if video else foto_equirect(caminho, 520, 162))
         crus.append({"id": seq, "nome": nome, "video": video,
                      "dur": round(dur, 1),
                      "relogio": relogio.strftime("%H:%M"),
@@ -233,7 +380,7 @@ def coletar(args, dia):
         print(f"  {seq}  {relogio:%H:%M} -> {real:%H:%M}  "
               f"{'video' if video else 'foto '}  {dur:5.1f}s")
 
-    return exportados, crus, whatsapp, canon
+    return exportados, crus, sem_data, referencia
 
 
 # -------------------------------------------------------------- pagina
@@ -264,7 +411,7 @@ def principal():
     if not os.path.isdir(args.cartao):
         raise SystemExit(f"cartao nao encontrado: {args.cartao}")
     dia = carregar_dia(args.dia)
-    exportados, crus, whatsapp, canon = coletar(args, dia)
+    exportados, crus, sem_data, referencia = coletar(args, dia)
 
     dados = {
         "dia": {"n": dia["n"], "data": dia["data"], "de": dia["de"],
@@ -277,7 +424,7 @@ def principal():
         "ajuste": args.ajuste,
         "existente": tabela_existente(),
         "exportados": exportados, "crus": crus,
-        "whatsapp": whatsapp, "canon": canon,
+        "semData": sem_data, "referencia": referencia,
     }
     saida = args.saida or os.path.join(RAIZ, "pareamento")
     modelo_path = os.path.join(RAIZ, "scripts", "parear_osmo.html")

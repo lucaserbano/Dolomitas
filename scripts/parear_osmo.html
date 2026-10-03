@@ -55,7 +55,7 @@ h1{font-size:clamp(1.45rem,3vw,2rem); font-weight:700; letter-spacing:-.02em;
   color:var(--pedra)}
 
 /* -------------------------------------------------- palco */
-.palco{display:grid; grid-template-columns:320px minmax(0,1fr); gap:clamp(18px,2.4vw,34px);
+.palco{display:grid; grid-template-columns:360px minmax(0,1fr); gap:clamp(18px,2.4vw,34px);
   align-items:start}
 @media(max-width:900px){.palco{grid-template-columns:1fr}}
 .rotulo{font-size:.6875rem; font-weight:700; letter-spacing:.17em;
@@ -63,17 +63,17 @@ h1{font-size:clamp(1.45rem,3vw,2rem); font-weight:700; letter-spacing:-.02em;
 .rotulo .dica{display:block; letter-spacing:0; text-transform:none;
   font-weight:400; font-size:.8125rem; color:var(--tinta-fraca); margin-top:3px}
 
-.fila{display:flex; flex-direction:column; gap:1px; max-height:76vh;
+.fila{display:flex; flex-direction:column; gap:1px; max-height:56vh;
   overflow-y:auto; background:var(--fio); border:1px solid var(--fio);
   border-radius:var(--curva)}
-.item{display:grid; grid-template-columns:30px 48px minmax(0,1fr); gap:11px;
+.item{display:grid; grid-template-columns:30px 76px minmax(0,1fr); gap:11px;
   align-items:center; padding:8px 9px; background:var(--noite);
   border:none; border-left:3px solid transparent; cursor:pointer;
   text-align:left; color:inherit; font:inherit; width:100%}
 .item:hover{background:var(--ardosia)}
 .item[aria-selected="true"]{background:var(--ardosia); border-left-color:var(--brasa)}
 .item.pronto{border-left-color:var(--areia)}
-.item img{width:48px; height:auto; display:block; border-radius:1px; background:var(--abismo)}
+.item img{width:76px; height:auto; display:block; border-radius:1px; background:var(--abismo)}
 .item .n{font-weight:700; color:var(--tinta-fraca); font-variant-numeric:tabular-nums;
   text-align:right; font-size:.8125rem}
 .item[aria-selected="true"] .n{color:var(--brasa)}
@@ -86,10 +86,25 @@ h1{font-size:clamp(1.45rem,3vw,2rem); font-weight:700; letter-spacing:-.02em;
   white-space:nowrap}
 .item .vazio{font-size:.8125rem; color:var(--tinta-fraca)}
 
+/* O que se procura fica à vista em tamanho grande, grudado no topo da
+   coluna, enquanto a lista rola por baixo. Comparar duas miniaturas de
+   um dedo de altura era o que tornava o pareamento penoso. */
+.holofote{position:sticky;top:0;z-index:2;margin-bottom:10px;
+  background:var(--noite);border:1px solid var(--fio-forte);border-radius:var(--curva);
+  padding:8px}
+.holofote img{width:100%;height:auto;display:block;border-radius:1px;
+  background:var(--abismo)}
+.holofote .nada{color:var(--tinta-fraca);font-size:.8125rem;padding:14px 4px;
+  text-align:center}
+.holofote .faixa{display:flex;justify-content:space-between;gap:10px;
+  align-items:baseline;padding:7px 2px 1px;font-variant-numeric:tabular-nums}
+.holofote .alvo{font-weight:700;color:var(--brasa)}
+.holofote .dados{font-size:.75rem;color:var(--tinta-fraca)}
+
 /* -------------------------------------------------- grades */
 .grade{display:grid; gap:12px}
-.grade-crus{grid-template-columns:repeat(auto-fill,minmax(188px,1fr))}
-.grade-canon{grid-template-columns:repeat(auto-fill,minmax(132px,1fr))}
+.grade-crus{grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+.grade-ref{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 
 .alvo{padding:0; background:var(--noite); border:1px solid var(--fio);
   border-radius:var(--curva); cursor:pointer; color:inherit; font:inherit;
@@ -145,7 +160,7 @@ textarea{width:100%; min-height:190px; background:var(--fenda); color:var(--tint
   <button class="aba" role="tab" id="aba-osmo" aria-controls="painel-osmo"
     aria-selected="true" type="button">Osmo 360<span class="conta" id="conta-osmo"></span></button>
   <button class="aba" role="tab" id="aba-zap" aria-controls="painel-zap"
-    aria-selected="false" type="button">WhatsApp<span class="conta" id="conta-zap"></span></button>
+    aria-selected="false" type="button">Sem data<span class="conta" id="conta-zap"></span></button>
 </div>
 
 <!-- ===================================================== Osmo -->
@@ -160,6 +175,7 @@ textarea{width:100%; min-height:190px; background:var(--fenda); color:var(--tint
     <section>
       <p class="rotulo">Exportados do Mimo
         <span class="dica">na ordem em que saíram</span></p>
+      <div class="holofote" id="holofote"></div>
       <div class="fila" id="fila-osmo"></div>
     </section>
     <section>
@@ -170,17 +186,18 @@ textarea{width:100%; min-height:190px; background:var(--fenda); color:var(--tint
   </div>
 </section>
 
-<!-- ===================================================== WhatsApp -->
+<!-- ===================================================== sem data -->
 <section id="painel-zap" role="tabpanel" aria-labelledby="aba-zap" hidden>
-  <p class="conduz">A hora no nome destas fotos é a da <b>mensagem</b>, não a da
-  foto: todas chegaram à noite, já no refúgio, enquanto a imagem é de pleno sol.
-  Elas não trazem EXIF nenhum. <b>Escolha a foto da Canon feita no mesmo trecho</b>
-  — a hora dela é que vai valer — ou digite a hora à mão.</p>
+  <p class="conduz">Estas mídias não têm hora de captura em lugar nenhum. As do
+  WhatsApp até trazem uma no nome, mas é a da <b>mensagem</b>: no dia 21 todas
+  chegaram à noite, já no refúgio, com a imagem em pleno sol.
+  <b>Escolha a mídia de referência feita no mesmo trecho</b> — a hora dela é que
+  vai valer — ou digite a hora à mão.</p>
 
   <div class="palco">
     <section>
-      <p class="rotulo">Fotos do WhatsApp
-        <span class="dica">na ordem em que chegaram</span></p>
+      <p class="rotulo">Sem hora de captura
+        <span class="dica">em ordem de nome</span></p>
       <div class="fila" id="fila-zap"></div>
     </section>
     <section>
@@ -190,9 +207,9 @@ textarea{width:100%; min-height:190px; background:var(--fenda); color:var(--tint
         <button class="acao fantasma" id="aplicar-mao" type="button">Aplicar</button>
         <span class="aviso" id="aviso-mao"></span>
       </div>
-      <p class="rotulo">Fotos da Canon · referência
-        <span class="dica">têm EXIF; a hora e o ponto da trilha vêm de lá</span></p>
-      <div class="grade grade-canon" id="grade-canon"></div>
+      <p class="rotulo">Referência · mídias com hora própria
+        <span class="dica">a hora e o ponto da trilha vêm do arquivo</span></p>
+      <div class="grade grade-ref" id="grade-ref"></div>
     </section>
   </div>
 </section>
@@ -216,7 +233,7 @@ const D = window.DADOS;
 const CHAVE = "datar-dia-" + D.dia.n;
 
 // O que o usuário decidiu: exportado -> id do clipe no cartão, e
-// foto do WhatsApp -> hora HH:MM no fuso dos Dolomitas.
+// mídia sem data -> hora HH:MM no fuso dos Dolomitas.
 let pares = {}, horas = {};
 try {
   const guardado = JSON.parse(localStorage.getItem(CHAVE) || "{}");
@@ -226,7 +243,7 @@ try {
 
 let aba = "osmo";
 let escolhido = { osmo: D.exportados.length ? 0 : -1,
-                  zap: D.whatsapp.length ? 0 : -1 };
+                  zap: D.semData.length ? 0 : -1 };
 
 const $ = id => document.getElementById(id);
 const porId = Object.fromEntries(D.crus.map(c => [c.id, c]));
@@ -254,7 +271,7 @@ function contexto(c) {
 // -------------------------------------------------------- lista da esquerda
 function desenharFila(qual) {
   const alvo = qual === "osmo" ? $("fila-osmo") : $("fila-zap");
-  const lista = qual === "osmo" ? D.exportados : D.whatsapp;
+  const lista = qual === "osmo" ? D.exportados : D.semData;
   alvo.replaceChildren(...lista.map((item, i) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -272,7 +289,9 @@ function desenharFila(qual) {
     if (pronto) b.classList.add("pronto");
     const legenda = qual === "osmo"
       ? `${item.video ? "vídeo" : "foto"} · ${item.dur ? item.dur.toFixed(1).replace(".", ",") + " s" : "—"}`
-      : item.nome.slice(17, 25).replace(/-/g, ":") + " (mensagem)";
+      : (/^PHOTO-/.test(item.nome)
+          ? item.nome.slice(17, 25).replace(/-/g, ":") + " (mensagem)"
+          : (item.video ? "vídeo" : "foto"));
     b.innerHTML = `<span class="n">${i + 1}</span>
       <img src="${item.img || ""}" alt="">
       <span class="meta">
@@ -283,6 +302,26 @@ function desenharFila(qual) {
     b.addEventListener("click", () => { escolhido[qual] = i; render(); });
     return b;
   }));
+}
+
+/** O exportado selecionado, grande, para o olho ter o que comparar. */
+function desenharHolofote() {
+  const m = escolhido.osmo >= 0 ? D.exportados[escolhido.osmo] : null;
+  const alvo = $("holofote");
+  if (!m) {
+    alvo.innerHTML = `<p class="nada">Escolha um exportado na lista.</p>`;
+    return;
+  }
+  const c = porId[pares[m.nome]];
+  alvo.innerHTML = `<img src="${m.img || ""}" alt="">
+    <span class="faixa">
+      <span class="alvo">nº ${escolhido.osmo + 1} de ${D.exportados.length}</span>
+      <span class="dados">${m.video ? "vídeo · " + m.dur.toFixed(1).replace(".", ",") + " s" : "foto"}</span>
+    </span>
+    <span class="faixa">
+      <span class="dados">${c ? "casado com o clipe " + c.id : "ainda sem clipe"}</span>
+      <span class="dados" style="color:var(--areia)">${c ? c.hora : ""}</span>
+    </span>`;
 }
 
 // -------------------------------------------------------- limites de ordem
@@ -342,9 +381,9 @@ function desenharCrus() {
   }));
 }
 
-// -------------------------------------------------------- grade da Canon
-function desenharCanon() {
-  $("grade-canon").replaceChildren(...D.canon.map(f => {
+// ----------------------------------------------- grade de referência
+function desenharRef() {
+  $("grade-ref").replaceChildren(...D.referencia.map(f => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "alvo";
@@ -354,7 +393,7 @@ function desenharCanon() {
         <span class="ctx">${contexto(f.ctx)}</span>
       </span>`;
     b.addEventListener("click", () => {
-      const w = D.whatsapp[escolhido.zap];
+      const w = D.semData[escolhido.zap];
       if (!w) return;
       horas[w.nome] = f.hora;
       avancar("zap"); salvar(); render();
@@ -364,7 +403,7 @@ function desenharCanon() {
 }
 
 function avancar(qual) {
-  const lista = qual === "osmo" ? D.exportados : D.whatsapp;
+  const lista = qual === "osmo" ? D.exportados : D.semData;
   const feito = qual === "osmo"
     ? n => !!pares[n] : n => !!horas[n];
   for (let k = escolhido[qual] + 1; k < lista.length; k++) {
@@ -379,7 +418,7 @@ function montarJson() {
     const c = porId[pares[e.nome]];
     if (c) relogio[e.nome] = c.iso;
   }
-  for (const w of D.whatsapp) {
+  for (const w of D.semData) {
     if (horas[w.nome]) real[w.nome] = `${D.dia.data}T${horas[w.nome]}:00+02:00`;
   }
   const saida = Object.assign({}, D.existente);
@@ -401,23 +440,23 @@ function salvar() {
 // -------------------------------------------------------- render
 function render() {
   const fOsmo = D.exportados.filter(e => pares[e.nome]).length;
-  const fZap = D.whatsapp.filter(w => horas[w.nome]).length;
+  const fZap = D.semData.filter(w => horas[w.nome]).length;
   $("conta-osmo").textContent = `${fOsmo}/${D.exportados.length}`;
-  $("conta-zap").textContent = `${fZap}/${D.whatsapp.length}`;
+  $("conta-zap").textContent = `${fZap}/${D.semData.length}`;
   $("aba-osmo").setAttribute("aria-selected", String(aba === "osmo"));
   $("aba-zap").setAttribute("aria-selected", String(aba === "zap"));
   $("painel-osmo").hidden = aba !== "osmo";
   $("painel-zap").hidden = aba !== "zap";
 
-  desenharFila("osmo"); desenharFila("zap");
-  desenharCrus(); desenharCanon();
+  desenharFila("osmo"); desenharFila("zap"); desenharHolofote();
+  desenharCrus(); desenharRef();
 
-  const falta = (D.exportados.length - fOsmo) + (D.whatsapp.length - fZap);
+  const falta = (D.exportados.length - fOsmo) + (D.semData.length - fZap);
   $("placar").innerHTML = falta
     ? `<b>${fOsmo + fZap}</b> datados · faltam ${falta}`
     : `<b>tudo datado</b> · ${fOsmo + fZap} arquivos`;
   $("json").value = montarJson();
-  const w = D.whatsapp[escolhido.zap];
+  const w = D.semData[escolhido.zap];
   $("hora-mao").value = (w && horas[w.nome]) || "";
 }
 
@@ -425,7 +464,7 @@ function render() {
 $("aba-osmo").addEventListener("click", () => { aba = "osmo"; render(); });
 $("aba-zap").addEventListener("click", () => { aba = "zap"; render(); });
 $("aplicar-mao").addEventListener("click", () => {
-  const w = D.whatsapp[escolhido.zap], v = $("hora-mao").value;
+  const w = D.semData[escolhido.zap], v = $("hora-mao").value;
   if (!w) return;
   if (!v) { $("aviso-mao").textContent = "Escolha uma hora primeiro."; return; }
   $("aviso-mao").textContent = "";
@@ -439,12 +478,12 @@ $("copiar").addEventListener("click", async () => {
 });
 $("limpar").addEventListener("click", () => {
   pares = {}; horas = {};
-  escolhido = { osmo: D.exportados.length ? 0 : -1, zap: D.whatsapp.length ? 0 : -1 };
+  escolhido = { osmo: D.exportados.length ? 0 : -1, zap: D.semData.length ? 0 : -1 };
   salvar(); render();
 });
 document.addEventListener("keydown", ev => {
   if (ev.target.matches("input,textarea")) return;
-  const lista = aba === "osmo" ? D.exportados : D.whatsapp;
+  const lista = aba === "osmo" ? D.exportados : D.semData;
   if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
     const passo = ev.key === "ArrowDown" ? 1 : -1;
     const n = escolhido[aba] + passo;
