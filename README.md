@@ -361,6 +361,11 @@ quatro linhas, e cada elemento é preso à sua linha pelo nome — a ordem no HT
 é outra, porque fora do teatro a mídia flutua. Fechar a mídia sai do teatro:
 sem foto ele não teria assunto.
 
+O interruptor **Mídias** vale no teatro como em qualquer lugar: a travessia
+para em cada foto e vídeo do trecho. A diferença é que lá não há o "X" para
+liberar o caminho — a próxima mídia simplesmente toma o lugar da anterior, e
+quem retoma a caminhada é o play.
+
 A roda da bússola e o "seguir o trilheiro" continuam no ar, agora pendurados
 na borda de cima da faixa do mapa em vez da do palco: são absolutos, e sem
 reancorar iriam parar sobre a foto. A roda encolhe para 60 px, o menor disco

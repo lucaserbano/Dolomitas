@@ -1187,6 +1187,7 @@ button, input { font: inherit; color: inherit; }
 #palco {
   --mapa-alt: clamp(150px, 26vh, 320px);
   --tira-alt: 86px;
+  --divisor-alt: 11px;
 }
 
 #palco.teatro {
@@ -1220,6 +1221,14 @@ button, input { font: inherit; color: inherit; }
   top: calc(100% - var(--mapa-alt) + var(--e2));
   bottom: auto;
 }
+/* O resumo de fim de etapa é absoluto e vinha com z-index menor que o da
+   mídia: no teatro, onde a mídia ocupa o palco, ele sumia atrás dela. Sobe
+   para a frente e se centra na faixa da mídia, não no palco inteiro. */
+#palco.teatro .resumo {
+  z-index: 14;
+  top: calc((100% - var(--tira-alt) - var(--divisor-alt) - var(--mapa-alt)) / 2);
+}
+
 /* A faixa é baixa: a roda encolhe para caber sem engolir o mapa. */
 #palco.teatro .roda {
   left: var(--e2);
@@ -1383,7 +1392,7 @@ button, input { font: inherit; color: inherit; }
 #palco.teatro .divisor {
   display: grid;
   place-items: center;
-  height: 11px;
+  height: var(--divisor-alt);
   background: var(--noite);
   cursor: ns-resize;
   touch-action: none;

@@ -212,7 +212,12 @@ export class Galeria {
    * A janela de meio minuto evita que um salto grande de tempo pule o item.
    */
   verificar(dia, tempo) {
-    if (!this.automatico || this.ativa) return;
+    /* Fora do teatro, a mídia aberta é quem segura a travessia: só o "X"
+       libera o caminho, e procurar a próxima com uma ainda na tela abriria
+       duas ao mesmo tempo. No teatro não existe esse estado — há sempre uma
+       mídia em cartaz —, e manter a trava fazia a travessia passar reto por
+       todas as seguintes. Lá a próxima simplesmente toma o lugar da anterior. */
+    if (!this.automatico || (this.ativa && !this.teatro)) return;
     const achado = this.midias.find(
       (m) => m.dia === dia.n &&
              // As mídias feitas antes de partir e já no refúgio ficam presas
