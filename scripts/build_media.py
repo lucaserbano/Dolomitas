@@ -81,33 +81,94 @@ def _graus(valor, ref):
 _datas_manuais = None
 
 
-def preservar_etapas_antigas(itens):
+def _instante(midia, dia_antigo, fuso):
+    """Instante da captura de uma midia que ja nao tem o arquivo original.
+
+    Dentro do trajeto o proprio `t` guarda o segundo exato, e e dele que se
+    parte. Fora dele nao: `t` foi grudado na ponta da etapa quando a midia foi
+    ancorada, e o unico vestigio da hora real e o relogio da legenda — com
+    precisao de minuto, que para uma foto do refugio basta.
+    """
+    t0 = dia_antigo["resumo"]["inicioUTC"]
+    if midia.get("fase") == "trajeto":
+        return t0 + midia.get("t", 0)
+    if not re.fullmatch(r"\d{2}:\d{2}", midia.get("hora", "")):
+        return None
+    h, m = (int(v) for v in midia["hora"].split(":"))
+    epoch = datetime.fromisoformat(dia_antigo["data"]).replace(
+        hour=h, minute=m, tzinfo=fuso).timestamp()
+    # uma foto da madrugada seguinte ainda pertence a etapa da vespera
+    return epoch + 24 * 3600 if epoch < t0 - 12 * 3600 else epoch
+
+
+def reancorar(midia, dias, fuso):
+    """Recoloca no trajeto uma midia vinda do media.json anterior.
+
+    O arquivo original ja saiu de midias/ e levou junto a data de captura, mas
+    o bastante ficou gravado na propria entrada para refazer a conta quando o
+    trajeto muda — e o que mantem as fotos no lugar certo quando uma etapa
+    ganha no fim um trecho que o relogio nao registrou.
+
+    O `desvioGps` nao e refeito: a coordenada do arquivo se foi com ele.
+    """
+    dia_antigo = next((d for d in dias if d["n"] == midia.get("dia")), None)
+    if not dia_antigo:
+        return midia, False
+    epoch = _instante(midia, dia_antigo, fuso)
+    if epoch is None:
+        return midia, False
+
+    dia, rel, fase, estado = localizar_no_trajeto(dias, epoch)
+    # a hora sozinha e ambigua entre etapas; na duvida, nao se mexe
+    if dia is None or dia["n"] != midia["dia"]:
+        return midia, False
+
+    nova = dict(midia)
+    nova.update(estado)
+    nova["t"] = round(rel, 1)
+    nova["fase"] = fase
+    nova["legenda"] = montar_legenda(rel, estado, fase, dia)
+    mudou = (nova["t"], nova["lon"], nova["lat"]) != (
+        midia.get("t"), midia.get("lon"), midia.get("lat"))
+    return nova, mudou
+
+
+def preservar_etapas_antigas(itens, dias, fuso):
     """Mantem no media.json o que ja foi publicado e saiu de midias/.
 
     As midias originais sao pesadas e vao sendo retiradas da pasta etapa a
     etapa, enquanto os derivados ficam em docs/media/ para sempre. Sem isto,
     rodar o script depois de esvaziar midias/ apagaria do mapa as etapas
     anteriores. A miniatura e a prova de que a midia continua publicada.
+
+    Cada uma e reancorada no trajeto atual antes de voltar para a lista.
     """
     caminho = os.path.join(DIR_DADOS, "media.json")
     if not os.path.exists(caminho):
-        return 0
+        return 0, 0
     try:
         with open(caminho, encoding="utf-8") as fh:
             antigas = json.load(fh).get("midias", [])
     except (json.JSONDecodeError, OSError):
-        return 0
+        return 0, 0
 
+    # O `id` carrega o segundo em que a midia caiu no trajeto. Se o trajeto do
+    # dia mudou, o mesmo arquivo volta desta rodada com outro `id` — por isso a
+    # comparacao tambem e pelo nome do original, senao a midia apareceria duas
+    # vezes no mapa.
     conhecidos = {m["id"] for m in itens}
-    guardadas = 0
+    originais = {m["original"] for m in itens if m.get("original")}
+    guardadas = movidas = 0
     for m in antigas:
-        if m.get("id") in conhecidos:
+        if m.get("id") in conhecidos or m.get("original") in originais:
             continue
         thumb = os.path.join(RAIZ, "docs", m.get("thumb", ""))
         if m.get("thumb") and os.path.exists(thumb):
-            itens.append(m)
+            nova, mudou = reancorar(m, dias, fuso)
+            itens.append(nova)
             guardadas += 1
-    return guardadas
+            movidas += 1 if mudou else 0
+    return guardadas, movidas
 
 
 def meta_por_tabela(caminho):
@@ -193,6 +254,31 @@ def meta_por_pillow(caminho):
                     local = (lat, lon)
             return quando, local
     except Exception:
+        return None, None
+
+
+# O sips le HEIC, que a Pillow nao abre sem plugin.
+EXT_SIPS = {".heic", ".heif"}
+
+
+def meta_por_sips(caminho):
+    """Data de captura de um HEIC pelo sips, que ja vem no macOS.
+
+    E a mesma data que o Spotlight tambem conhece, com uma diferenca que
+    decide tudo: o sips entrega a hora como ela esta no EXIF — sem fuso, e
+    por isso lida aqui no fuso das fotos —, enquanto o `mdls` carimba nela o
+    fuso desta maquina. Para uma foto feita na Europa e copiada no Brasil sao
+    cinco horas de erro, o bastante para joga-la no trecho errado da etapa.
+    """
+    if os.path.splitext(caminho)[1].lower() not in EXT_SIPS:
+        return None, None
+    m = re.search(r"creation:\s*(\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2})",
+                  _rodar(["sips", "-g", "creation", caminho]))
+    if not m:
+        return None, None
+    try:
+        return datetime.strptime(m.group(1), "%Y:%m:%d %H:%M:%S"), None
+    except ValueError:
         return None, None
 
 
@@ -314,8 +400,9 @@ def ler_metadados(caminho, ehvideo):
     tentativas = ([meta_por_tabela, meta_por_ffprobe, meta_por_nome,
                    meta_por_mdls, meta_por_arquivo]
                   if ehvideo
-                  else [meta_por_tabela, meta_por_pillow, meta_por_nome,
-                        meta_por_mdls, meta_por_arquivo, meta_por_ffprobe])
+                  else [meta_por_tabela, meta_por_pillow, meta_por_sips,
+                        meta_por_nome, meta_por_mdls, meta_por_arquivo,
+                        meta_por_ffprobe])
     quando = local = None
     for fn in tentativas:
         q, l = fn(caminho)
@@ -639,15 +726,13 @@ def main():
             if ext in EXT_FOTO or ext in EXT_VIDEO:
                 arquivos.append(os.path.join(pasta, nome))
 
-    if not arquivos:
-        with open(os.path.join(DIR_DADOS, "media.json"), "w", encoding="utf-8") as fh:
-            json.dump({"midias": []}, fh, ensure_ascii=False, indent=2)
-        print("Nenhuma midia em midias/ — media.json vazio gerado.")
-        print("O site funciona normalmente; rode este script de novo quando")
-        print("colocar as fotos e videos na pasta.")
-        return
-
-    print(f"Encontradas {len(arquivos)} midias.\n")
+    # Com a pasta vazia o trabalho nao e nenhum, mas o script segue ate o fim:
+    # e preservar_etapas_antigas que mantem no media.json o que ja foi
+    # publicado. Sair aqui apagaria do mapa todas as etapas anteriores.
+    if arquivos:
+        print(f"Encontradas {len(arquivos)} midias.\n")
+    else:
+        print("Nenhuma midia nova em midias/.\n")
     itens, sem_ancora = [], []
 
     for indice, caminho in enumerate(arquivos, 1):
@@ -720,15 +805,22 @@ def main():
         print(f"  [{indice:3d}/{len(arquivos)}] dia {dia['n']}  "
               f"{formatar_duracao(rel):>7}{marca:>10}  {nome}")
 
-    guardadas = preservar_etapas_antigas(itens)
+    guardadas, movidas = preservar_etapas_antigas(itens, dias, fuso)
     itens.sort(key=lambda m: (m["dia"], m["t"]))
     with open(os.path.join(DIR_DADOS, "media.json"), "w", encoding="utf-8") as fh:
         json.dump({"midias": itens}, fh, ensure_ascii=False, indent=2)
+
+    if not itens:
+        print("Nada publicado ainda. O site funciona assim mesmo; rode este")
+        print("script de novo quando colocar as fotos e videos na pasta.")
+        return
 
     print(f"\n{len(itens) - guardadas} midias ancoradas no trajeto.")
     if guardadas:
         print(f"({guardadas} de etapas anteriores mantidas: o original saiu de "
               f"midias/, mas o arquivo publicado continua em docs/media/)")
+        if movidas:
+            print(f"({movidas} delas mudaram de lugar: o trajeto do dia mudou)")
     relatar_peso(itens, base_videos)
     distantes = [m for m in itens if m["desvioGps"] and m["desvioGps"] > 150]
     if distantes:

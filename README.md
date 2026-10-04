@@ -154,6 +154,13 @@ Os originais são lidos onde estiverem; nada é copiado para o projeto.
 > em `_hora_real`, com a hora tirada de uma foto da Canon do mesmo trecho —
 > é o que a página do `parear_osmo.py` faz.
 
+> **HEIC do iPhone: o `sips` antes do Spotlight.** A Pillow não abre HEIC sem
+> plugin, então a data desses arquivos vinha do `mdls`. Os dois leem o mesmo
+> EXIF, mas o Spotlight carimba nele o fuso **desta máquina** — para uma foto
+> feita na Europa e copiada no Brasil são cinco horas de erro, o bastante para
+> jogá-la no trecho errado da etapa. O `sips`, que também já vem no macOS,
+> devolve a hora como ela está no arquivo, sem fuso, e aí vale o `--fuso`.
+
 Bucket: `https://pub-b469c0ff44ae40a6b799c069e44960ef.r2.dev`
 
 ## Rodar na sua máquina
@@ -188,6 +195,13 @@ Ele pode ser rodado quantas vezes quiser: o que já foi convertido é reaproveit
 > miniatura ainda exista em `docs/media/` é mantida. É isso que permite tirar os
 > originais da etapa 1 do disco sem que ela suma do mapa. Para remover uma mídia
 > de verdade, apague também o arquivo dela em `docs/media/`.
+>
+> **O que foi mantido é recolocado no trajeto a cada rodada.** O arquivo
+> original já se foi, mas o dia e o relógio ficaram gravados na própria
+> entrada, e isso basta para refazer a conta — é o que mantém as fotos no lugar
+> certo quando uma etapa muda de traçado, como a 3 mudou ao ganhar o trecho até
+> o Valparola. Dentro do trajeto o instante exato está no próprio `t`; fora
+> dele, só na hora da legenda, com precisão de minuto.
 
 Opções úteis:
 
