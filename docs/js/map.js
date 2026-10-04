@@ -293,9 +293,10 @@ export function filtrarPinos(mapa, diaN) {
 /**
  * Etiquetas dos pontos de partida e chegada de cada etapa, mais os marcos
  * intermediários declarados em build_trail.py (um refúgio no meio do
- * caminho, por exemplo).
+ * caminho, por exemplo) e os lugares de paisagem — os que não estão no
+ * trajeto, mas situam quem olha: um pico, uma torre, a cidade lá embaixo.
  */
-export function adicionarRefugios(mapa, dias) {
+export function adicionarRefugios(mapa, dias, paisagem = []) {
   const pontos = [];
   dias.forEach((dia, i) => {
     if (i === 0) {
@@ -306,6 +307,9 @@ export function adicionarRefugios(mapa, dias) {
     });
     const u = dia.lon.length - 1;
     pontos.push({ nome: dia.para, lon: dia.lon[u], lat: dia.lat[u], tipo: "fim" });
+  });
+  paisagem.forEach((p) => {
+    pontos.push({ nome: p.nome, lon: p.lon, lat: p.lat, tipo: "paisagem" });
   });
 
   const marcadores = pontos.map((p) => {

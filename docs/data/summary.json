@@ -16,5 +16,32 @@
   "periodo": [
     "2026-09-19",
     "2026-09-24"
+  ],
+  "paisagem": [
+    {
+      "nome": "Cortina d'Ampezzo",
+      "lat": 46.536785,
+      "lon": 12.138618
+    },
+    {
+      "nome": "Cinque Torri",
+      "lat": 46.509075,
+      "lon": 12.051868
+    },
+    {
+      "nome": "Rifugio Cinque Torri",
+      "lat": 46.508217,
+      "lon": 12.054734
+    },
+    {
+      "nome": "Rifugio Nuvolau",
+      "lat": 46.495242,
+      "lon": 12.045729
+    },
+    {
+      "nome": "Monte Pelmo",
+      "lat": 46.419977,
+      "lon": 12.134728
+    }
   ]
 }

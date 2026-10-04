@@ -48,9 +48,23 @@ MARCOS = {
     "2026-09-20": [("Rifugio Pederü", 46.6384000, 12.0413700)],
     "2026-09-21": [("Rifugio Lagazuoi", 46.5277340, 12.0081330),
                    ("Passo Falzarego", 46.5187500, 12.0084320)],
+    "2026-09-22": [("Rifugio Averau", 46.4995790, 12.0405910)],
+    "2026-09-23": [("Rifugio Città di Fiume", 46.4369040, 12.1225770)],
 }
 
 DISTANCIA_MAXIMA_MARCO = 120   # metros
+
+# Lugares que nao estao no trajeto, mas situam quem olha o mapa: o refugio no
+# alto da torre por onde nao se passou, o pico que acompanhou o dia inteiro, a
+# cidade que serve de regua para as distancias. Nao tem tempo nem quilometragem
+# — so nome e lugar —, e por isso nao pertencem a etapa nenhuma.
+PAISAGEM = [
+    ("Cortina d'Ampezzo", 46.5367850, 12.1386180),
+    ("Cinque Torri", 46.5090750, 12.0518680),
+    ("Rifugio Cinque Torri", 46.5082170, 12.0547340),
+    ("Rifugio Nuvolau", 46.4952420, 12.0457290),
+    ("Monte Pelmo", 46.4199770, 12.1347280),
+]
 
 
 # Parametros de processamento
@@ -647,6 +661,8 @@ def main():
         "eleMax": max(d["resumo"]["eleMax"] for d in dias),
         "limites": [min(todos_lon), min(todos_lat), max(todos_lon), max(todos_lat)],
         "periodo": [ETAPAS[0][0], ETAPAS[-1][0]],
+        "paisagem": [{"nome": n, "lat": round(la, 6), "lon": round(lo, 6)}
+                     for n, la, lo in PAISAGEM],
     }
 
     with open(os.path.join(DIR_DADOS, "days.json"), "w", encoding="utf-8") as fh:

@@ -67,7 +67,7 @@ async function iniciar() {
     ativarTerreno(mapa);
     adicionarTrilhas(mapa, dias);
     adicionarPinosMidia(mapa, midias);
-    adicionarRefugios(mapa, dias);
+    adicionarRefugios(mapa, dias, resumo.paisagem ?? []);
     pronto = true;
   });
 
