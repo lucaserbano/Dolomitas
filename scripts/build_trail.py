@@ -10,6 +10,10 @@ Entradas (pasta trechos/), opcionais:
   - AAAA-MM-DD_*.json      : pedacos andados com o relogio ja desligado,
                              tracados a mao (ver anexar_trechos)
 
+Entradas (pasta extras/), opcionais:
+  - AAAA-MM-DD_*.json      : atividades fora da travessia, sem relogio nenhum
+                             (ver processar_extra)
+
 Uso:  python3 scripts/build_trail.py
 """
 
@@ -24,6 +28,7 @@ from datetime import datetime, timezone
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIR_RELOGIO = os.path.join(RAIZ, "relogio")
 DIR_TRECHOS = os.path.join(RAIZ, "trechos")
+DIR_EXTRAS = os.path.join(RAIZ, "extras")
 DIR_DADOS = os.path.join(RAIZ, "docs", "data")
 CACHE_SAUDE = os.path.join(DIR_DADOS, ".health_cache.json")
 
@@ -481,6 +486,123 @@ def anexar_trechos(serie, extensao, t0):
     return trechos, paradas, ganho, perda
 
 
+# --------------------------------------------- atividades fora da travessia
+
+def rampa_extras(n):
+    """Tons de pedra para as atividades que nao sao da travessia.
+
+    A rampa dos seis dias vai do bege ao brasa; estas ficam de fora dela, num
+    cinza quente que nao disputa com o trajeto principal.
+    """
+    paradas = ["#cfc6b4", "#a9b2ae"]
+    if n <= 1:
+        return paradas[:1]
+    cores = []
+    for i in range(n):
+        t = i / (n - 1)
+        L1, a1, b1 = hex_para_oklab(paradas[0])
+        L2, a2, b2 = hex_para_oklab(paradas[1])
+        cores.append(oklab_para_hex(L1 + t*(L2-L1), a1 + t*(a2-a1), b1 + t*(b2-b1)))
+    return cores
+
+
+def ler_extras():
+    """Le as atividades de extras/, em ordem de data."""
+    if not os.path.isdir(DIR_EXTRAS):
+        return []
+    saida = []
+    for nome in sorted(os.listdir(DIR_EXTRAS)):
+        if not nome.endswith(".json"):
+            continue
+        with open(os.path.join(DIR_EXTRAS, nome), encoding="utf-8") as fh:
+            dados = json.load(fh)
+        if not nome.startswith(dados.get("data", "")):
+            raise SystemExit(f"extras/{nome}: a data de dentro nao bate com a do nome")
+        saida.append(dados)
+    saida.sort(key=lambda e: e["data"])
+    return saida
+
+
+def processar_extra(n, extra, cor):
+    """Monta uma etapa que nao veio do relogio.
+
+    Sao os passeios de fora da travessia: nao houve atividade gravada, entao
+    nao ha GPS, frequencia cardiaca nem calorias. A geometria vem tracada a
+    mao e os horarios, das midias — a mesma materia dos trechos sem registro,
+    so que aqui ela e o dia inteiro.
+
+    Com `idaevolta`, o caminho volta sobre si mesmo: os pontos sao repetidos
+    em ordem inversa e o tempo e repartido pelo comprimento dos dois sentidos.
+    """
+    pontos = [tuple(p) for p in extra["pontos"]]
+    if extra.get("idaevolta"):
+        pontos = pontos + pontos[-2::-1]
+
+    saida = datetime.fromisoformat(extra["saida"]).timestamp()
+    chegada = datetime.fromisoformat(extra["chegada"]).timestamp()
+
+    parciais = [0.0]
+    for a, b in zip(pontos, pontos[1:]):
+        parciais.append(parciais[-1] + haversine(a[0], a[1], b[0], b[1]))
+    comprimento = parciais[-1] or 1.0
+
+    serie = {"lon": [], "lat": [], "ele": [], "t": [], "hr": [],
+             "dist": [], "gain": [], "loss": []}
+    ganho = perda = 0.0
+    referencia = pontos[0][2]
+    for i, (lat, lon, ele) in enumerate(pontos):
+        if ele > referencia + LIMIAR_GANHO:
+            ganho += ele - referencia
+            referencia = ele
+        elif ele < referencia - LIMIAR_GANHO:
+            perda += referencia - ele
+            referencia = ele
+        serie["lon"].append(round(lon, 6))
+        serie["lat"].append(round(lat, 6))
+        serie["ele"].append(round(ele, 1))
+        serie["t"].append(round((chegada - saida) * (parciais[i] / comprimento), 1))
+        serie["hr"].append(None)
+        serie["dist"].append(round(parciais[i], 1))
+        serie["gain"].append(round(ganho, 1))
+        serie["loss"].append(round(perda, 1))
+
+    duracao = chegada - saida
+    resumo = {
+        "dist": round(comprimento),
+        "ganho": round(ganho),
+        "perda": round(perda),
+        "dur": round(duracao),
+        "mov": round(duracao),
+        "eleMin": round(min(p[2] for p in pontos)),
+        "eleMax": round(max(p[2] for p in pontos)),
+        "fcMed": 0, "fcMax": 0, "fcMin": 0, "kcal": 0,
+        "inicioUTC": round(saida),
+    }
+    # Na ida e volta a chegada e a propria partida; quem merece o nome do
+    # destino e o ponto mais distante, onde se deu meia-volta.
+    marcos = []
+    if extra.get("idaevolta"):
+        meio = len(extra["pontos"]) - 1
+        marcos.append({
+            "nome": extra["para"],
+            "lon": serie["lon"][meio], "lat": serie["lat"][meio],
+            "t": serie["t"][meio], "dist": round(serie["dist"][meio]),
+        })
+
+    return {
+        "n": n, "data": extra["data"], "de": extra["de"], "para": extra["para"],
+        "cor": cor, "extra": True, "modo": extra.get("modo", "a_pe"),
+        "idaevolta": bool(extra.get("idaevolta")),
+        "pontos": len(pontos), "medidos": 0,
+        "paradas": [], "marcos": marcos,
+        # a linha inteira e tracado a mao: o site a desenha de outro jeito
+        "trechos": [{"modo": extra.get("modo", "a_pe"), "nome": "", "de": 0,
+                     "ate": len(pontos) - 1, "dist": round(comprimento),
+                     "dur": round(duracao)}],
+        "resumo": resumo, **serie,
+    }
+
+
 # ------------------------------------------------------------- montagem
 
 def processar_dia(n, data, de, para, caminho_gpx, cor, saude, extensao=None):
@@ -644,21 +766,37 @@ def main():
               f"-{r['perda']:4d} m  FC {r['fcMed']:3d}/{r['fcMax']:3d}  "
               f"{dia['pontos']:5d} pontos")
 
+    extras = ler_extras()
+    if extras:
+        print("\nAtividades fora da travessia:")
+        cores_extra = rampa_extras(len(extras))
+        ultima = len(dias)
+        for i, e in enumerate(extras):
+            dia = processar_extra(ultima + i + 1, e, cores_extra[i])
+            dias.append(dia)
+            r = dia["resumo"]
+            volta = " (ida e volta)" if dia["idaevolta"] else ""
+            print(f"  Extra {dia['n']} {dia['data']}  {dia['de']} -> {dia['para']}{volta}")
+            print(f"         {r['dist']/1000:5.2f} km  +{r['ganho']:4d} m  "
+                  f"-{r['perda']:4d} m  {dia['modo']:10s} {dia['pontos']:5d} pontos")
+
+    # Os totais sao da travessia: o que veio de fora nao entra na conta.
+    travessia = [d for d in dias if not d.get("extra")]
     todos_lon = [v for d in dias for v in d["lon"]]
     todos_lat = [v for d in dias for v in d["lat"]]
-    dist_total = sum(d["resumo"]["dist"] for d in dias)
-    ganho_total = sum(d["resumo"]["ganho"] for d in dias)
-    perda_total = sum(d["resumo"]["perda"] for d in dias)
+    dist_total = sum(d["resumo"]["dist"] for d in travessia)
+    ganho_total = sum(d["resumo"]["ganho"] for d in travessia)
+    perda_total = sum(d["resumo"]["perda"] for d in travessia)
 
     resumo = {
         "titulo": "Alta Via 1",
         "subtitulo": "Dolomitas",
-        "dias": len(dias),
+        "dias": len(travessia),
         "distTotal": dist_total,
         "ganhoTotal": ganho_total,
         "perdaTotal": perda_total,
-        "eleMin": min(d["resumo"]["eleMin"] for d in dias),
-        "eleMax": max(d["resumo"]["eleMax"] for d in dias),
+        "eleMin": min(d["resumo"]["eleMin"] for d in travessia),
+        "eleMax": max(d["resumo"]["eleMax"] for d in travessia),
         "limites": [min(todos_lon), min(todos_lat), max(todos_lon), max(todos_lat)],
         "periodo": [ETAPAS[0][0], ETAPAS[-1][0]],
         "paisagem": [{"nome": n, "lat": round(la, 6), "lon": round(lo, 6)}
@@ -671,8 +809,12 @@ def main():
         json.dump(resumo, fh, ensure_ascii=False, indent=2)
 
     tam = os.path.getsize(os.path.join(DIR_DADOS, "days.json")) / 1024
-    print(f"\nTOTAL  {dist_total/1000:.1f} km  +{ganho_total} m  -{perda_total} m  "
+    print(f"\nTRAVESSIA  {dist_total/1000:.1f} km  +{ganho_total} m  -{perda_total} m  "
           f"elevacao {resumo['eleMin']}-{resumo['eleMax']} m")
+    if extras:
+        fora = sum(d["resumo"]["dist"] for d in dias if d.get("extra"))
+        print(f"           + {fora/1000:.1f} km em {len(extras)} atividades fora "
+              f"da travessia, que nao entram no total")
     print(f"days.json: {tam:.0f} KB  ({sum(d['pontos'] for d in dias)} pontos)")
 
 

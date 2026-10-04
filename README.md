@@ -177,6 +177,27 @@ Os originais são lidos onde estiverem; nada é copiado para o projeto.
 
 Bucket: `https://pub-b469c0ff44ae40a6b799c069e44960ef.r2.dev`
 
+## A capa
+
+A foto de abertura é `docs/img/capa-2400.webp` (e a de 1200 px para telas
+pequenas), gerada da original com:
+
+```python
+from PIL import Image
+im = Image.open("sua-foto.jpg").convert("RGB")
+for larg, q in ((2400, 80), (1200, 78)):
+    c = im.copy(); c.thumbnail((larg, larg * 10), Image.LANCZOS)
+    c.save(f"docs/img/capa-{larg}.webp", "WEBP", quality=q, method=6)
+```
+
+Por cima dela vão dois gradientes: um de cima para baixo, que fecha o céu — a
+área mais clara da foto, e justo onde o título cai — e volta a fechar no
+rodapé; e um da esquerda para a direita, que dá chão ao texto sem apagar o
+assunto da imagem, que está à direita. Sobre a foto a linha da rota e os
+rótulos dos números sobem para o tom da pedra: os tons apagados do painel não
+se sustentam ali. Com isso o pior caso de contraste medido é 5,1:1, acima do
+mínimo de 4,5:1 — e isso antes de contar a sombra do texto.
+
 ## Rodar na sua máquina
 
 ```bash
@@ -256,6 +277,42 @@ As coordenadas saem do OpenStreetMap. O script procura o ponto do trajeto
 mais próximo, calcula o tempo de caminhada até ali e **avisa se o ponto cair
 a mais de 120 m da trilha** — sinal de coordenada errada. Depois é só rodar
 `build_trail.py` de novo.
+
+## Atividades fora da travessia
+
+Nem tudo o que foi feito nos Dolomitas pertence à Alta Via. O passeio de
+bicicleta até San Vito e a caminhada pelo pé das Três Cimas estão no site para
+que as mídias deles tenham onde morar — mas **não entram na quilometragem, na
+subida nem na contagem de etapas**, e não têm dado de saúde nenhum: não houve
+atividade gravada no relógio.
+
+Cada uma é um arquivo em `extras/`, com o nome começando pela data:
+
+```json
+{
+  "data": "2026-09-27",
+  "modo": "a_pe",
+  "de": "Rifugio Auronzo",
+  "para": "Forcella Col di Mezzo",
+  "saida":   "2026-09-27T09:34:00+02:00",
+  "chegada": "2026-09-27T13:05:00+02:00",
+  "idaevolta": true,
+  "pontos": [[46.612205, 12.296095, 2324.0], ["..."]]
+}
+```
+
+`modo` é `a_pe` ou `bicicleta`, e muda o verbo das legendas e o aviso do
+painel. `idaevolta` repete os pontos em ordem inversa: o destino declarado
+passa a ser o ponto da meia-volta — é ele que leva o nome no mapa — e a
+chegada volta a ser a partida.
+
+A geometria e as altitudes saem de onde saíram as dos trechos sem registro
+(OpenStreetMap e o DEM do Mapterhorn), e os horários, das próprias mídias.
+
+No site essas etapas entram no fim do trilho, atrás de um risco que separa a
+travessia do resto, com a faixa recuada. O cartão de fim de etapa esconde
+frequência e energia em vez de mostrar zero, e o "acumulado" vira um traço:
+não há acumulado de que falar.
 
 ## Trechos sem registro do relógio
 
@@ -456,6 +513,7 @@ de um quadro preto.
 ```
 relogio/*.gpx + export.xml ──▶ scripts/build_trail.py ──▶ site/data/days.json
 trechos/*.json             ──▶         ″
+extras/*.json              ──▶         ″
 midias/*                   ──▶ scripts/build_media.py ──▶ site/data/media.json
                                                           docs/media/*
 ```
@@ -528,6 +586,7 @@ Dados de relevo: [Mapterhorn][mt] (sem necessidade de chave de API).
 ```
 relogio/          GPX e export do Apple Health (fonte)
 trechos/          pedaços andados fora do registro do relógio, traçados à mão
+extras/           atividades que não são da travessia, traçadas à mão
 midias/           suas fotos e vídeos originais (não versionado)
 videos_para_subir/  vídeos convertidos, prontos para o bucket (não versionado)
 pareamento/       página de pareamento manual, gerada sob demanda (não versionado)

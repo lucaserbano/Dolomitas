@@ -60,7 +60,7 @@ export function trocarEtapa(dia) {
   definir("diaData", dataCurta(dia.data));
   definir("diaDe", dia.de);
   definir("diaPara", dia.para);
-  anotarTrecho(null);
+  anotarTrecho(dia, null);
   desenharPerfil(dia);
 }
 
@@ -70,12 +70,22 @@ export function trocarEtapa(dia) {
 const NOTA_TRECHO = {
   teleferico: "Teleférico — sem registro do relógio",
   a_pe: "Trilha sem registro do relógio",
+  bicicleta: "Ciclovia sem registro do relógio",
 };
 
-function anotarTrecho(trecho) {
+/* Fora da travessia o aviso vale o dia inteiro, e o que falta não é só o GPS:
+   não houve atividade gravada, então não há frequência nem calorias. */
+const NOTA_EXTRA = {
+  a_pe: "Fora da travessia · traçado à mão, sem dados do relógio",
+  bicicleta: "De bicicleta, fora da travessia · sem dados do relógio",
+};
+
+function anotarTrecho(dia, trecho) {
   const el = campos.diaNota;
   if (!el) return;
-  const texto = trecho ? NOTA_TRECHO[trecho.modo] ?? "" : "";
+  const texto = dia?.extra
+    ? NOTA_EXTRA[dia.modo] ?? NOTA_EXTRA.a_pe
+    : (trecho ? NOTA_TRECHO[trecho.modo] ?? "" : "");
   el.textContent = texto;
   el.hidden = !texto;
 }
@@ -86,11 +96,11 @@ export function atualizarMedidas(dia, estado, distAnterior) {
   definir("ganho", metros(estado.gain));
   definir("perda", metros(estado.loss));
   definir("distDia", km(estado.dist));
-  definir("distTotal", km(distAnterior + estado.dist));
+  definir("distTotal", distAnterior === null ? "—" : km(distAnterior + estado.dist));
   definir("decorrido", duracao(estado.t));
   definir("duracao", duracao(emMovimento(dia, estado.t)));
 
-  anotarTrecho(estado.trecho);
+  anotarTrecho(dia, estado.trecho);
 
   // o ponto ao lado de "Frequência" bate no ritmo lido
   if (estado.hr) {
@@ -223,7 +233,7 @@ export function construirLinhaTempo(dias, midias, aoBuscar) {
   dias.forEach((dia, i) => {
     const dur = duracoes[i];
     const el = document.createElement("div");
-    el.className = "faixa";
+    el.className = dia.extra ? "faixa faixa-extra" : "faixa";
     el.style.flex = `${dur / duracaoTotal}`;
     el.style.setProperty("--cor", dia.cor);
 
@@ -299,13 +309,24 @@ export function preencherResumo(dia, ehUltima, proxima) {
   campos.rFcMax.innerHTML = `${r.fcMax}<i>bpm</i>`;
   campos.rKcal.innerHTML = `${metros(r.kcal)}<i>kcal</i>`;
 
-  const aPe = (dia.trechos ?? []).filter((t) => t.modo === "a_pe");
-  const andado = aPe.reduce((soma, t) => soma + t.dist, 0);
-  definir("rNota", andado
-    ? `Os últimos ${km(andado)} km estão traçados à mão: o relógio foi `
-      + "encerrado antes do fim da etapa."
-    : "");
-  campos.rNota.hidden = !andado;
+  /* Sem relógio não há frequência nem energia: as caixas somem em vez de
+     mostrar zero, que seria um número inventado. */
+  const semRelogio = !!dia.extra;
+  ["rFcMed", "rFcMax", "rKcal"].forEach((c) => {
+    const caixa = campos[c]?.closest("div");
+    if (caixa) caixa.hidden = semRelogio;
+  });
+
+  const tracado = (dia.trechos ?? []).filter((t) => t.modo !== "teleferico");
+  const andado = tracado.reduce((soma, t) => soma + t.dist, 0);
+  definir("rNota", semRelogio
+    ? "Atividade de fora da travessia: não entra na quilometragem total e "
+      + "não tem dados de saúde. O trajeto está traçado à mão."
+    : (andado
+        ? `Os últimos ${km(andado)} km estão traçados à mão: o relógio foi `
+          + "encerrado antes do fim da etapa."
+        : ""));
+  campos.rNota.hidden = !semRelogio && !andado;
 
   definir("rProximo", ehUltima ? "Rever a travessia" : `Seguir para ${proxima}`);
 }

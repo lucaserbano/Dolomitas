@@ -611,18 +611,24 @@ def formatar_duracao(segundos):
     return f"{h}h{m:02d}" if h else f"{m} min"
 
 
+# Como se chama o tempo passado, conforme o modo da etapa.
+VERBO = {"a_pe": "de caminhada", "bicicleta": "de bicicleta"}
+
+
 def montar_legenda(rel, estado, fase, dia):
     """Tempo de atividade + ganho de elevacao + distancia no dia.
 
     Fora do trajeto essas tres medidas nao dizem nada (seriam todas zero,
     ou todas o total do dia), entao a legenda vira a situacao do momento.
+    Numa etapa de ida e volta a chegada e o mesmo lugar da partida.
     """
+    chegada = dia["de"] if dia.get("idaevolta") else dia["para"]
     if fase == "antes":
         return f"Antes da partida, em {dia['de']}"
     if fase == "depois":
-        return f"Na chegada, em {dia['para']}"
+        return f"Na chegada, em {chegada}"
     km = f"{estado['dist'] / 1000:.1f}".replace(".", ",")   # separador pt-BR
-    return (f"{formatar_duracao(rel)} de caminhada  ·  "
+    return (f"{formatar_duracao(rel)} {VERBO.get(dia.get('modo'), VERBO['a_pe'])}  ·  "
             f"+{estado['gain']} m  ·  "
             f"{km} km no dia")
 

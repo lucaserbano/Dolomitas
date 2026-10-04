@@ -306,7 +306,10 @@ export function adicionarRefugios(mapa, dias, paisagem = []) {
       pontos.push({ nome: m.nome, lon: m.lon, lat: m.lat, tipo: "marco" });
     });
     const u = dia.lon.length - 1;
-    pontos.push({ nome: dia.para, lon: dia.lon[u], lat: dia.lat[u], tipo: "fim" });
+    /* Quem vai e volta chega onde saiu: o nome do destino já foi para o ponto
+       da meia-volta, e aqui vale o nome da partida. */
+    pontos.push({ nome: dia.idaevolta ? dia.de : dia.para,
+                  lon: dia.lon[u], lat: dia.lat[u], tipo: "fim" });
   });
   paisagem.forEach((p) => {
     pontos.push({ nome: p.nome, lon: p.lon, lat: p.lat, tipo: "paisagem" });

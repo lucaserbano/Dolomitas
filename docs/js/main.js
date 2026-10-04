@@ -54,9 +54,13 @@ async function iniciar() {
   prepararProgresso(dias);
   hud.escreverResumoGeral(resumo);
 
-  // distância acumulada até o início de cada etapa
+  /* Distância acumulada até o início de cada etapa. As atividades de fora da
+     travessia não entram na soma — e não têm acumulado nenhum para mostrar. */
   const acumulado = [];
-  dias.reduce((soma, d, i) => (acumulado[i] = soma, soma + d.resumo.dist), 0);
+  dias.reduce((soma, d, i) => {
+    acumulado[i] = d.extra ? null : soma;
+    return d.extra ? soma : soma + d.resumo.dist;
+  }, 0);
 
   const mapa = criarMapa("mapa", resumo.limites);
   let pronto = false;
