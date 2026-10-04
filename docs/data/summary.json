@@ -2,13 +2,13 @@
   "titulo": "Alta Via 1",
   "subtitulo": "Dolomitas",
   "dias": 6,
-  "distTotal": 73621,
-  "ganhoTotal": 4135,
-  "perdaTotal": 4099,
+  "distTotal": 76068,
+  "ganhoTotal": 4252,
+  "perdaTotal": 4157,
   "eleMin": 925,
   "eleMax": 2731,
   "limites": [
-    12.004159,
+    11.988357,
     46.401369,
     12.221543,
     46.695365

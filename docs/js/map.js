@@ -95,6 +95,35 @@ export function ativarTerreno(mapa, exagero = 1.4) {
   mapa.setTerrain({ source: "relevo", exaggeration: exagero });
 }
 
+/* ------------------------------------------- trechos sem registro do relogio
+
+   O fim do dia 3 nao tem GPS: a atividade foi encerrada no alto do Lagazuoi,
+   e o resto — o teleferico e a trilha ate o Rifugio Valparola — esta tracado
+   a mao. Essa parte da linha recebe o mesmo matiz do dia, mas puxado para o
+   contorno: quanto menos foi caminhada, mais apagada. Nada disso cria camada
+   nova — e tudo a mesma expressao de line-gradient. */
+const DESBOTE = { a_pe: 0.35, teleferico: 0.6 };
+
+function misturar(a, b, k) {
+  const canal = (cor, i) => parseInt(cor.slice(1 + i * 2, 3 + i * 2), 16);
+  const saida = [0, 1, 2].map((i) => {
+    const v = Math.round(canal(a, i) * (1 - k) + canal(b, i) * k);
+    return v.toString(16).padStart(2, "0");
+  });
+  return `#${saida.join("")}`;
+}
+
+/** Cores da linha por faixa de line-progress: [[inicio, cor], ...]. */
+function paleta(dia) {
+  const faixas = [[0, dia.cor]];
+  (dia.trechos ?? []).forEach((t) => {
+    faixas.push([dia.prog[t.de], misturar(dia.cor, CASCA, DESBOTE[t.modo] ?? 0.5)]);
+  });
+  return faixas;
+}
+
+const paletas = new Map();
+
 /**
  * Cria, para cada etapa, tres camadas: o traçado completo em fantasma,
  * o contorno escuro e a linha colorida.
@@ -105,6 +134,7 @@ export function ativarTerreno(mapa, exagero = 1.4) {
 export function adicionarTrilhas(mapa, dias) {
   dias.forEach((dia) => {
     const id = `dia${dia.n}`;
+    paletas.set(dia.n, paleta(dia));
     mapa.addSource(id, {
       type: "geojson",
       lineMetrics: true,
@@ -139,7 +169,7 @@ export function adicionarTrilhas(mapa, dias) {
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-width": ["interpolate", ["linear"], ["zoom"], 9, 4, 14, 7.5, 17, 11],
-        "line-gradient": corte(CASCA, 0),
+        "line-gradient": corte([[0, CASCA]], 0),
       },
     });
 
@@ -150,33 +180,48 @@ export function adicionarTrilhas(mapa, dias) {
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.6, 14, 3.6, 17, 6],
-        "line-gradient": corte(dia.cor, 0),
+        "line-gradient": corte(paletas.get(dia.n), 0),
       },
     });
   });
 }
 
+/** Monta a expressao garantindo paradas estritamente crescentes. */
+function expressao(paradas) {
+  const saida = [];
+  let anterior = -1;
+  paradas.forEach(([pos, cor]) => {
+    const x = Math.min(1, Math.max(0, pos, anterior + 1e-5));
+    if (x <= anterior) return;
+    saida.push(x, cor);
+    anterior = x;
+  });
+  return ["interpolate", ["linear"], ["line-progress"], ...saida];
+}
+
 /** Expressao que mostra a linha de 0 ate `fracao` e some depois. */
-function corte(cor, fracao) {
+function corte(faixas, fracao) {
   const p = Math.max(0.0001, Math.min(0.9999, fracao));
-  return [
-    "interpolate", ["linear"], ["line-progress"],
-    0, cor,
-    p, cor,
-    Math.min(p + 0.0005, 1), "rgba(0,0,0,0)",
-    1, "rgba(0,0,0,0)",
-  ];
+  const paradas = [[0, faixas[0][1]]];
+  let cor = faixas[0][1];
+  for (let k = 1; k < faixas.length; k += 1) {
+    const [inicio, proxima] = faixas[k];
+    if (inicio >= p) break;
+    // degrau seco: a cor anterior vale ate a vespera do limite
+    paradas.push([inicio - 0.0002, cor], [inicio, proxima]);
+    cor = proxima;
+  }
+  paradas.push([p, cor], [p + 0.0005, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]);
+  return expressao(paradas);
 }
 
 /** Avanca (ou recolhe) o desenho de uma etapa. */
 export function desenharAte(mapa, dia, fracao) {
-  if (fracao <= 0) {
-    mapa.setPaintProperty(`dia${dia.n}-linha`, "line-gradient", corte(dia.cor, 0));
-    mapa.setPaintProperty(`dia${dia.n}-casca`, "line-gradient", corte(CASCA, 0));
-    return;
-  }
-  mapa.setPaintProperty(`dia${dia.n}-linha`, "line-gradient", corte(dia.cor, fracao));
-  mapa.setPaintProperty(`dia${dia.n}-casca`, "line-gradient", corte(CASCA, fracao));
+  const faixas = paletas.get(dia.n) ?? [[0, dia.cor]];
+  const f = Math.max(0, fracao);
+  mapa.setPaintProperty(`dia${dia.n}-linha`, "line-gradient", corte(faixas, f));
+  mapa.setPaintProperty(`dia${dia.n}-casca`, "line-gradient",
+                        corte([[0, CASCA]], f));
 }
 
 /** Mostra o tracejado de prévia apenas na etapa em curso. */

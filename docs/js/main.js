@@ -4,7 +4,8 @@
 
 import { criarMapa, ativarTerreno, adicionarTrilhas, adicionarRefugios,
          adicionarPinosMidia, maplibregl } from "./map.js";
-import { Reprodutor, estadoEm, tempoMaisProximo } from "./animation.js";
+import { Reprodutor, estadoEm, tempoMaisProximo,
+         prepararProgresso } from "./animation.js";
 import { Galeria } from "./media.js";
 import * as hud from "./hud.js";
 import { instalarRoda } from "./roda.js";
@@ -50,6 +51,7 @@ async function iniciar() {
 
   const dias = dados.dias;
   const midias = galeriaDados.midias ?? [];
+  prepararProgresso(dias);
   hud.escreverResumoGeral(resumo);
 
   // distância acumulada até o início de cada etapa

@@ -63,6 +63,7 @@
         <span class="seta" aria-hidden="true">→</span>
         <span data-campo="diaPara">—</span>
       </h2>
+      <p class="etapa-nota" data-campo="diaNota" hidden></p>
     </section>
 
     <section class="instrumentos">
@@ -87,6 +88,7 @@
       <svg id="perfil-svg" viewBox="0 0 320 96" preserveAspectRatio="none" role="img" aria-hidden="true">
         <path id="perfil-area" d=""></path>
         <path id="perfil-linha" d=""></path>
+        <path id="perfil-sem-registro" d=""></path>
         <line id="perfil-cursor" x1="0" y1="0" x2="0" y2="96"></line>
       </svg>
       <div class="perfil-escala">
@@ -137,6 +139,7 @@
         <div><dt>FC máx</dt><dd data-campo="rFcMax"></dd></div>
         <div><dt>Energia</dt><dd data-campo="rKcal"></dd></div>
       </dl>
+      <p class="resumo-nota" data-campo="rNota" hidden></p>
       <button id="btn-seguir" class="botao-seguir" type="button">
         <span data-campo="rProximo">Seguir</span>
       </button>

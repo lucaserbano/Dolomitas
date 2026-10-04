@@ -307,6 +307,24 @@ button, input { font: inherit; color: inherit; }
 }
 .etapa-nome .seta { font-size: 0.72em; color: var(--cor-dia, var(--pedra)); }
 
+/* aviso dos pedaços em que o relógio já estava desligado */
+.etapa-nota {
+  margin: var(--e2) 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  color: var(--tinta-fraca);
+}
+.etapa-nota::before {
+  content: "";
+  display: inline-block;
+  width: 1.1em;
+  height: 0;
+  margin-right: 0.5em;
+  vertical-align: 0.25em;
+  border-top: 1.5px dashed var(--cor-dia, var(--pedra));
+}
+
 /* ── instrumentos ────────────────────────────────────────── */
 .instrumentos {
   display: grid;
@@ -370,6 +388,15 @@ button, input { font: inherit; color: inherit; }
 }
 #perfil-area   { fill: color-mix(in oklab, var(--cor-dia, var(--pedra)) 20%, transparent); }
 #perfil-linha  { fill: none; stroke: var(--cor-dia, var(--pedra)); stroke-width: 1.25; vector-effect: non-scaling-stroke; }
+/* o pedaço traçado à mão, depois que o relógio parou de gravar */
+#perfil-sem-registro {
+  fill: none;
+  stroke: var(--cor-dia, var(--pedra));
+  stroke-width: 1.25;
+  stroke-dasharray: 3 2.5;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+}
 #perfil-cursor { stroke: var(--tinta); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.85; }
 
 .perfil-escala {
@@ -431,6 +458,14 @@ button, input { font: inherit; color: inherit; }
   white-space: nowrap;
 }
 .resumo-grade dd i { font-style: normal; font-size: 0.6em; font-weight: 500; color: var(--tinta-fraca); margin-left: 0.15em; }
+
+.resumo-nota {
+  margin: 0 0 var(--e4);
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--tinta-fraca);
+  max-width: 44ch;
+}
 
 .botao-seguir {
   width: 100%;

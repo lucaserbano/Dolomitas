@@ -19,6 +19,29 @@ const OLHAR_ADIANTE = 400; // metros
 const GIRO_MAXIMO = 7;     // graus por segundo
 const ZONA_MORTA = 5;      // graus: abaixo disso a câmera nem se mexe
 
+/**
+ * Mede o progresso geométrico (0 a 1) de cada vértice ao longo da linha.
+ *
+ * É a mesma régua do `line-progress` do MapLibre, e é por ela que o traço
+ * avança. A distância percorrida não serve: ela fica parada nos trechos em
+ * que houve deslocamento sem caminhada — o teleférico do fim do dia 3 —, e
+ * aí o desenho ficaria para trás do trilheiro.
+ */
+export function prepararProgresso(dias) {
+  dias.forEach((dia) => {
+    const n = dia.lon.length;
+    const acumulado = new Float64Array(n);
+    for (let i = 1; i < n; i += 1) {
+      const escala = Math.cos((dia.lat[i] * Math.PI) / 180);
+      const dx = (dia.lon[i] - dia.lon[i - 1]) * 111320 * escala;
+      const dy = (dia.lat[i] - dia.lat[i - 1]) * 110540;
+      acumulado[i] = acumulado[i - 1] + Math.hypot(dx, dy);
+    }
+    const total = acumulado[n - 1] || 1;
+    dia.prog = Array.from(acumulado, (v) => v / total);
+  });
+}
+
 /** Busca binária: último índice cujo tempo é <= alvo. */
 function indicePara(ts, alvo) {
   let lo = 0, hi = ts.length - 1;
@@ -53,19 +76,18 @@ export function estadoEm(dia, tempo) {
   const f = vao > 0 ? (t - ts[i]) / vao : 0;
   const mix = (a) => a[i] + f * (a[j] - a[i]);
 
-  const total = dia.dist[dia.dist.length - 1] || 1;
-  const dist = mix(dia.dist);
-
   return {
     t, i,
     lon: mix(dia.lon),
     lat: mix(dia.lat),
     ele: mix(dia.ele),
-    dist,
+    dist: mix(dia.dist),
     gain: mix(dia.gain),
     loss: mix(dia.loss),
     hr: dia.hr[i] ?? dia.hr[j] ?? null,
-    fracao: dist / total,
+    fracao: mix(dia.prog),
+    // o pedaço sem registro do relógio em que se está, se for o caso
+    trecho: (dia.trechos ?? []).find((tr) => i > tr.de && i <= tr.ate) ?? null,
     fim: t >= ts[ts.length - 1] - 0.001,
   };
 }

@@ -3,16 +3,27 @@
 Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 (19 a 24 de setembro de 2026), montado a partir dos dados do Apple Watch.
 
-**73,6 km · +4.135 m de subida · −4.099 m de descida · 925 m a 2.731 m de altitude**
+**76,1 km · +4.252 m de subida · −4.157 m de descida · 925 m a 2.731 m de altitude**
 
 | Etapa | Trajeto | Distância | Subida | Descida |
 |-------|---------|-----------|--------|---------|
 | 1 · 19/09 | Lago di Braies → Rifugio Sennes | 10,1 km | +971 m | −335 m |
 | 2 · 20/09 | Rifugio Sennes → Rifugio Fanes | 10,4 km | +565 m | −630 m |
-| 3 · 21/09 | Rifugio Fanes → Rifugio Lagazuoi | 13,2 km | +1.095 m | −437 m |
-| 4 · 22/09 | Rifugio Lagazuoi → Malga Giau | 9,8 km | +469 m | −593 m |
+| 3 · 21/09 | Rifugio Fanes → Rifugio Valparola | 15,6 km | +1.212 m | −495 m |
+| 4 · 22/09 | Rifugio Valparola → Malga Giau | 9,8 km | +469 m | −593 m |
 | 5 · 23/09 | Malga Giau → Passo Staulanza | 14,7 km | +666 m | −914 m |
 | 6 · 24/09 | Passo Staulanza → Borca di Cadore | 15,4 km | +369 m | −1.190 m |
+
+> **A etapa 3 não termina onde o relógio parou.** A atividade foi encerrada no
+> alto do Lagazuoi, mas o dia seguiu: teleférico até o Passo Falzarego e mais
+> 2,4 km de trilha até o Rifugio Valparola. Esse pedaço não tem GPS e está
+> traçado à mão — veja [Trechos sem registro do relógio](#trechos-sem-registro-do-relógio).
+>
+> **E a 4 não começa onde o relógio ligou.** O dia saiu do Rifugio Valparola,
+> mas de ônibus até o início da trilha; o GPX só começa 2,5 km adiante, ao lado
+> do Passo Falzarego. É a única emenda da travessia em que a linha do mapa dá
+> um salto — nas outras cinco, o fim de uma etapa e o começo da seguinte ficam
+> a menos de 400 m um do outro.
 
 ---
 
@@ -204,15 +215,78 @@ mais próximo, calcula o tempo de caminhada até ali e **avisa se o ponto cair
 a mais de 120 m da trilha** — sinal de coordenada errada. Depois é só rodar
 `build_trail.py` de novo.
 
+## Trechos sem registro do relógio
+
+Às vezes a etapa continua depois que a atividade foi encerrada. Foi o que
+aconteceu no dia 21: o relógio parou no alto do Lagazuoi, e dali ainda houve
+o teleférico até o Passo Falzarego e 2,4 km de trilha até o Rifugio Valparola.
+Não há GPS nenhum desses dois trechos.
+
+Para emendá-los na etapa, ponha um arquivo em `trechos/` com o nome começando
+pela data:
+
+```json
+{
+  "data": "2026-09-21",
+  "trechos": [
+    {
+      "modo": "teleferico",
+      "nome": "Funivia Lagazuoi",
+      "saida":   "2026-09-21T16:18:00+02:00",
+      "chegada": "2026-09-21T16:24:00+02:00",
+      "pontos": [
+        [46.527592, 12.010160, 2729.7],
+        [46.527506, 12.008922, 2728.6]
+      ]
+    }
+  ]
+}
+```
+
+Cada ponto é `[latitude, longitude, altitude]`, e o primeiro do primeiro
+trecho é o último ponto do GPX, para a linha não ter emenda visível. Vale
+densificar até uns 15 m entre pontos: com vértices muito afastados a linha
+atravessa o relevo em vez de se deitar sobre ele. O tempo é repartido pelo
+comprimento, entre a saída e a chegada declaradas; o que passar entre um
+trecho e o seguinte entra como parada, e não infla o tempo em movimento.
+
+O nome da chegada continua saindo da tabela `ETAPAS`, em `build_trail.py` —
+foi lá que a etapa 3 passou a terminar no Rifugio Valparola.
+
+**`modo` decide o que conta.** `a_pe` entra na distância e no desnível do dia;
+`teleferico` não entra em nenhum dos dois — ele desloca, não caminha. Por isso
+a etapa 3 fecha em 15,6 km e +1.212 m, sem os 625 m que a cabine desceu.
+
+De onde tirar cada coisa:
+
+- **a geometria**, das trilhas do OpenStreetMap — vale traçar pelo caminho que
+  se andou de verdade, e não pelo mais curto;
+- **as altitudes**, do mesmo modelo de relevo que o mapa usa
+  (`https://tiles.mapterhorn.com/{z}/{x}/{y}.webp`, codificação *terrarium*:
+  `altitude = R·256 + G + B/256 − 32768`). Convém passar uma média móvel
+  curta antes de gravar: o degrau do modelo, sozinho, vira subida falsa. Num
+  teleférico a altitude é a reta entre as duas estações, não o terreno
+  embaixo;
+- **os horários**, das próprias mídias. No dia 21 o vídeo de dentro da cabine
+  é de 16h22, um da trilha é de 16h55, outro de 17h21 e a primeira foto dentro
+  do refúgio é de 17h46 — isso prende as duas pontas com folga de minutos.
+
+No site essa parte da linha sai no mesmo matiz do dia, mas puxada para o tom
+do contorno: quanto menos foi caminhada, mais apagada. O perfil de elevação a
+desenha tracejada, o painel avisa enquanto se passa por ali e o cartão de fim
+de etapa diz quantos quilômetros foram traçados à mão.
+
 ## Reprocessar o trajeto
 
 ```bash
 python3 scripts/build_trail.py
 ```
 
-Só é necessário se os GPX mudarem. Exige `relogio/export.xml`, que **não está
-no repositório** (tem 329 MB, acima do limite do GitHub) — reexporte do app
-Saúde se precisar.
+Só é necessário se os GPX ou os arquivos de `trechos/` mudarem. Para ler os
+dados de saúde do zero é preciso `relogio/export.xml`, que **não está no
+repositório** (tem 329 MB, acima do limite do GitHub) — reexporte do app Saúde
+se precisar. Enquanto `docs/data/.health_cache.json` existir, ele não é
+necessário: a varredura já foi feita e o resultado não muda.
 
 ---
 
@@ -339,6 +413,7 @@ de um quadro preto.
 
 ```
 relogio/*.gpx + export.xml ──▶ scripts/build_trail.py ──▶ site/data/days.json
+trechos/*.json             ──▶         ″
 midias/*                   ──▶ scripts/build_media.py ──▶ site/data/media.json
                                                           docs/media/*
 ```
@@ -369,7 +444,15 @@ textura. O terreno fica em tons frios e dessaturados justamente para que as
 trilhas quentes sobressaiam.
 
 A linha cresce sem recriar geometria — o avanço só reescreve a expressão de
-`line-gradient`, que corta a linha via `line-progress`.
+`line-gradient`, que corta a linha via `line-progress`. É a mesma expressão
+que apaga os trechos sem registro do relógio: em vez de uma cor só, ela ganha
+um degrau em cada troca de modo. Nenhuma camada a mais.
+
+A régua desse avanço é o comprimento do traçado, medido no carregamento, e não
+a distância percorrida — onde houve deslocamento sem caminhada, a distância
+fica parada e o desenho ficaria para trás do trilheiro. É também o eixo do
+perfil de elevação, para o teleférico aparecer como uma rampa e não como uma
+queda vertical.
 
 **Modo teatro.** Por padrão a foto abre num painel de canto e o mapa continua
 sendo o assunto. O botão de cantos no alto da mídia — ou a tecla `T` — inverte
@@ -402,6 +485,7 @@ Dados de relevo: [Mapterhorn][mt] (sem necessidade de chave de API).
 
 ```
 relogio/          GPX e export do Apple Health (fonte)
+trechos/          pedaços andados fora do registro do relógio, traçados à mão
 midias/           suas fotos e vídeos originais (não versionado)
 videos_para_subir/  vídeos convertidos, prontos para o bucket (não versionado)
 pareamento/       página de pareamento manual, gerada sob demanda (não versionado)

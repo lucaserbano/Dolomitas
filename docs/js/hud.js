@@ -60,7 +60,24 @@ export function trocarEtapa(dia) {
   definir("diaData", dataCurta(dia.data));
   definir("diaDe", dia.de);
   definir("diaPara", dia.para);
+  anotarTrecho(null);
   desenharPerfil(dia);
+}
+
+/* Avisos dos pedaços em que não há GPS: o relógio foi encerrado antes do fim
+   da etapa e dali em diante o traçado é feito à mão. Dizer isso na hora em
+   que se passa por ali vale mais do que uma nota de rodapé. */
+const NOTA_TRECHO = {
+  teleferico: "Teleférico — sem registro do relógio",
+  a_pe: "Trilha sem registro do relógio",
+};
+
+function anotarTrecho(trecho) {
+  const el = campos.diaNota;
+  if (!el) return;
+  const texto = trecho ? NOTA_TRECHO[trecho.modo] ?? "" : "";
+  el.textContent = texto;
+  el.hidden = !texto;
 }
 
 export function atualizarMedidas(dia, estado, distAnterior) {
@@ -72,6 +89,8 @@ export function atualizarMedidas(dia, estado, distAnterior) {
   definir("distTotal", km(distAnterior + estado.dist));
   definir("decorrido", duracao(estado.t));
   definir("duracao", duracao(emMovimento(dia, estado.t)));
+
+  anotarTrecho(estado.trecho);
 
   // o ponto ao lado de "Frequência" bate no ritmo lido
   if (estado.hr) {
@@ -96,26 +115,38 @@ function emMovimento(dia, t) {
 const SVG_L = 320, SVG_A = 96, MARGEM = 8;
 
 export function desenharPerfil(dia) {
-  const dists = dia.dist;
   const eles = dia.ele;
-  const total = dists[dists.length - 1] || 1;
+  const u = eles.length - 1;
   const min = Math.min(...eles);
   const max = Math.max(...eles);
   const vao = max - min || 1;
 
-  const x = (d) => (d / total) * SVG_L;
+  /* O eixo é o progresso ao longo do traçado, e não a distância percorrida:
+     onde houve deslocamento sem caminhada — o teleférico do dia 3 — a
+     distância fica parada, e o perfil cairia na vertical. */
+  const x = (i) => dia.prog[i] * SVG_L;
   const y = (e) => MARGEM + (1 - (e - min) / vao) * (SVG_A - 2 * MARGEM);
 
   // uma amostra a cada ~2 px já descreve a silhueta
-  const passo = Math.max(1, Math.floor(dists.length / 240));
-  let d = "";
-  for (let i = 0; i < dists.length; i += passo) {
-    d += `${i === 0 ? "M" : "L"}${x(dists[i]).toFixed(1)},${y(eles[i]).toFixed(1)}`;
-  }
-  d += `L${SVG_L},${y(eles[eles.length - 1]).toFixed(1)}`;
+  const passo = Math.max(1, Math.floor(eles.length / 240));
+  const caminho = (de, ate) => {
+    const ids = [];
+    for (let i = de; i < ate; i += passo) ids.push(i);
+    ids.push(ate);
+    return ids
+      .map((i, k) => `${k ? "L" : "M"}${x(i).toFixed(1)},${y(eles[i]).toFixed(1)}`)
+      .join("");
+  };
 
-  $("#perfil-linha").setAttribute("d", d);
-  $("#perfil-area").setAttribute("d", `${d}L${SVG_L},${SVG_A}L0,${SVG_A}Z`);
+  // o traço se parte onde o relógio parou de gravar
+  const fimMedido = Math.min((dia.medidos ?? eles.length) - 1, u);
+  const medido = caminho(0, fimMedido);
+  const semRegistro = fimMedido < u ? caminho(fimMedido, u) : "";
+
+  $("#perfil-linha").setAttribute("d", medido);
+  $("#perfil-sem-registro").setAttribute("d", semRegistro);
+  $("#perfil-area").setAttribute(
+    "d", `${medido}${semRegistro.replace("M", "L")}L${SVG_L},${SVG_A}L0,${SVG_A}Z`);
   definir("perfilMin", `${metros(min)} m`);
   definir("perfilMax", `${metros(max)} m`);
 }
@@ -243,5 +274,14 @@ export function preencherResumo(dia, ehUltima, proxima) {
   campos.rFcMed.innerHTML = `${r.fcMed}<i>bpm</i>`;
   campos.rFcMax.innerHTML = `${r.fcMax}<i>bpm</i>`;
   campos.rKcal.innerHTML = `${metros(r.kcal)}<i>kcal</i>`;
+
+  const aPe = (dia.trechos ?? []).filter((t) => t.modo === "a_pe");
+  const andado = aPe.reduce((soma, t) => soma + t.dist, 0);
+  definir("rNota", andado
+    ? `Os últimos ${km(andado)} km estão traçados à mão: o relógio foi `
+      + "encerrado antes do fim da etapa."
+    : "");
+  campos.rNota.hidden = !andado;
+
   definir("rProximo", ehUltima ? "Rever a travessia" : `Seguir para ${proxima}`);
 }

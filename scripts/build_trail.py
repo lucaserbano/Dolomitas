@@ -6,6 +6,10 @@ Entradas (pasta relogio/):
   - route_2026-09-NN_*.gpx : trajeto GPS a 1 Hz
   - export.xml             : frequencia cardiaca e estatisticas dos treinos
 
+Entradas (pasta trechos/), opcionais:
+  - AAAA-MM-DD_*.json      : pedacos andados com o relogio ja desligado,
+                             tracados a mao (ver anexar_trechos)
+
 Uso:  python3 scripts/build_trail.py
 """
 
@@ -19,16 +23,19 @@ from datetime import datetime, timezone
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIR_RELOGIO = os.path.join(RAIZ, "relogio")
+DIR_TRECHOS = os.path.join(RAIZ, "trechos")
 DIR_DADOS = os.path.join(RAIZ, "docs", "data")
 CACHE_SAUDE = os.path.join(DIR_DADOS, ".health_cache.json")
 
 # Trechos percorridos, na ordem. Os nomes vieram do cruzamento das coordenadas
 # de inicio/fim de cada GPX com o OpenStreetMap (todos a menos de 160 m).
+# A excecao e a saida da etapa 4: o GPX comeca ao lado do Passo Falzarego, onde
+# o onibus deixou o grupo, e nao no Rifugio Valparola, onde o dia comecou.
 ETAPAS = [
     ("2026-09-19", "Lago di Braies", "Rifugio Sennes"),
     ("2026-09-20", "Rifugio Sennes", "Rifugio Fanes"),
-    ("2026-09-21", "Rifugio Fanes", "Rifugio Lagazuoi"),
-    ("2026-09-22", "Rifugio Lagazuoi", "Malga Giau"),
+    ("2026-09-21", "Rifugio Fanes", "Rifugio Valparola"),
+    ("2026-09-22", "Rifugio Valparola", "Malga Giau"),
     ("2026-09-23", "Malga Giau", "Passo Staulanza"),
     ("2026-09-24", "Passo Staulanza", "Borca di Cadore"),
 ]
@@ -39,6 +46,8 @@ ETAPAS = [
 MARCOS = {
     "2026-09-19": [("Rifugio Biella", 46.6656312, 12.0845833)],
     "2026-09-20": [("Rifugio Pederü", 46.6384000, 12.0413700)],
+    "2026-09-21": [("Rifugio Lagazuoi", 46.5277340, 12.0081330),
+                   ("Passo Falzarego", 46.5187500, 12.0084320)],
 }
 
 DISTANCIA_MAXIMA_MARCO = 120   # metros
@@ -362,9 +371,105 @@ def tempo_em_movimento(pausas, inicio, fim):
     return max(0.0, (fim - inicio) - parado)
 
 
+# ------------------------------------------------- trechos sem registro
+
+def ler_trecho(data):
+    """Le o arquivo de trechos tracados a mao daquele dia, se houver."""
+    if not os.path.isdir(DIR_TRECHOS):
+        return None
+    for nome in sorted(os.listdir(DIR_TRECHOS)):
+        if nome.startswith(data) and nome.endswith(".json"):
+            with open(os.path.join(DIR_TRECHOS, nome), encoding="utf-8") as fh:
+                dados = json.load(fh)
+            if dados.get("data") not in (None, data):
+                raise SystemExit(
+                    f"trechos/{nome}: a data de dentro ({dados['data']}) nao bate "
+                    f"com a do nome do arquivo ({data})")
+            return dados
+    return None
+
+
+def anexar_trechos(serie, extensao, t0):
+    """Emenda na serie do dia os trechos andados com o relogio ja desligado.
+
+    Sao pedacos sem GPS: a geometria vem tracada a mao sobre o mapa e os
+    horarios, das midias. Por isso entram marcados, e nao misturados ao que
+    foi medido — o site desenha essa parte de outro jeito.
+
+    So o que foi feito a pe conta na distancia e no desnivel: um teleferico
+    desloca, nao caminha. O tempo parado entre um trecho e outro vira pausa,
+    para nao inflar o tempo em movimento.
+    """
+    trechos, paradas = [], []
+    dist = serie["dist"][-1]
+    ganho = serie["gain"][-1]
+    perda = serie["loss"][-1]
+    fim_anterior = t0 + serie["t"][-1]
+
+    for trecho in extensao.get("trechos", []):
+        a_pe = trecho["modo"] == "a_pe"
+        saida = datetime.fromisoformat(trecho["saida"]).timestamp()
+        chegada = datetime.fromisoformat(trecho["chegada"]).timestamp()
+        if saida < fim_anterior:
+            raise SystemExit(
+                f"Trecho '{trecho.get('nome')}' comeca antes do fim do anterior")
+
+        # O caminho comeca onde a serie parou, para a linha nao ter emenda.
+        emenda = (serie["lat"][-1], serie["lon"][-1], serie["ele"][-1])
+        pontos = [tuple(p) for p in trecho["pontos"]]
+        if haversine(emenda[0], emenda[1], pontos[0][0], pontos[0][1]) < 1.0:
+            pontos = pontos[1:]
+        caminho = [emenda] + pontos
+
+        parciais = [0.0]
+        for a, b in zip(caminho, caminho[1:]):
+            parciais.append(parciais[-1] + haversine(a[0], a[1], b[0], b[1]))
+        comprimento = parciais[-1] or 1.0
+
+        if saida > fim_anterior:
+            paradas.append([round(fim_anterior - t0, 1), round(saida - t0, 1)])
+        if not a_pe:
+            paradas.append([round(saida - t0, 1), round(chegada - t0, 1)])
+
+        inicio = len(serie["t"]) - 1      # o ponto de emenda, ja na serie
+        referencia = caminho[0][2]
+        for i in range(1, len(caminho)):
+            lat, lon, ele = caminho[i]
+            if a_pe:
+                dist += parciais[i] - parciais[i - 1]
+                if ele > referencia + LIMIAR_GANHO:
+                    ganho += ele - referencia
+                    referencia = ele
+                elif ele < referencia - LIMIAR_GANHO:
+                    perda += referencia - ele
+                    referencia = ele
+            quando = saida + (chegada - saida) * (parciais[i] / comprimento)
+            serie["lon"].append(round(lon, 6))
+            serie["lat"].append(round(lat, 6))
+            serie["ele"].append(round(ele, 1))
+            serie["t"].append(round(quando - t0, 1))
+            serie["hr"].append(None)
+            serie["dist"].append(round(dist, 1))
+            serie["gain"].append(round(ganho, 1))
+            serie["loss"].append(round(perda, 1))
+
+        trechos.append({
+            "modo": trecho["modo"],
+            "nome": trecho.get("nome", ""),
+            "de": inicio,
+            "ate": len(serie["t"]) - 1,
+            "dist": round(parciais[-1]),
+            "dur": round(chegada - saida),
+        })
+        fim_anterior = chegada
+
+    paradas.sort()
+    return trechos, paradas, ganho, perda
+
+
 # ------------------------------------------------------------- montagem
 
-def processar_dia(n, data, de, para, caminho_gpx, cor, saude):
+def processar_dia(n, data, de, para, caminho_gpx, cor, saude, extensao=None):
     pontos = ler_gpx(caminho_gpx)
     preencher_altitudes(pontos)
 
@@ -430,37 +535,53 @@ def processar_dia(n, data, de, para, caminho_gpx, cor, saude):
         serie["gain"].append(round(ganho_acum[i], 1))
         serie["loss"].append(round(perda_acum[i], 1))
 
+    medidos = len(serie["t"])
+    fim_medido = serie["t"][-1]
+    trechos, paradas_extra = [], []
+    if extensao:
+        trechos, paradas_extra, total_ganho, total_perda = anexar_trechos(
+            serie, extensao, t0)
+        for t in trechos:
+            print(f"    trecho sem registro: {t['nome']} — {t['modo']}, "
+                  f"{t['dist']} m em {t['dur'] / 60:.0f} min")
+
+    # Marcos: procurados na serie ja completa, para que um ponto caido num
+    # trecho tracado a mao tambem seja encontrado.
     marcos = []
     for nome_marco, mlat, mlon in MARCOS.get(data, []):
-        j = min(range(len(pontos)),
-                key=lambda k: haversine(mlat, mlon, pontos[k]["lat"], pontos[k]["lon"]))
-        afastamento = haversine(mlat, mlon, pontos[j]["lat"], pontos[j]["lon"])
+        j = min(range(len(serie["t"])),
+                key=lambda k: haversine(mlat, mlon, serie["lat"][k], serie["lon"][k]))
+        afastamento = haversine(mlat, mlon, serie["lat"][j], serie["lon"][j])
         if afastamento > DISTANCIA_MAXIMA_MARCO:
             print(f"    ! {nome_marco} esta a {afastamento:.0f} m do trajeto; conferir")
         marcos.append({
             "nome": nome_marco,
             "lon": round(mlon, 6), "lat": round(mlat, 6),
-            "t": round(pontos[j]["ts"] - t0, 1),
-            "dist": round(dist_acum[j]),
+            "t": serie["t"][j],
+            "dist": round(serie["dist"][j]),
         })
-        print(f"    marco: {nome_marco} em {(pontos[j]['ts'] - t0) / 3600:.2f} h "
+        print(f"    marco: {nome_marco} em {serie['t'][j] / 3600:.2f} h "
               f"({afastamento:.0f} m do trajeto)")
 
     treino = saude["treinos"].get(data, {})
-    duracao = pontos[-1]["ts"] - t0
+    duracao = serie["t"][-1]
     pausas = treino.get("pausas", [])
-    movimento = tempo_em_movimento(pausas, t0, pontos[-1]["ts"])
-    paradas = intervalos_parados(pausas, t0, pontos[-1]["ts"])
+    paradas = intervalos_parados(pausas, t0, t0 + fim_medido) + paradas_extra
+    # O que veio depois do relogio: o tempo anexado menos o que ficou parado.
+    parado_extra = sum(f - i for i, f in paradas_extra)
+    movimento = (tempo_em_movimento(pausas, t0, t0 + fim_medido)
+                 + (duracao - fim_medido) - parado_extra)
 
+    altitudes = eles + serie["ele"][medidos:]
     fcs = [v for v in serie["hr"] if v]
     resumo = {
-        "dist": round(dist_acum[-1]),
+        "dist": round(serie["dist"][-1]),
         "ganho": round(total_ganho),
         "perda": round(total_perda),
         "dur": round(duracao),
         "mov": round(movimento),
-        "eleMin": round(min(eles)),
-        "eleMax": round(max(eles)),
+        "eleMin": round(min(altitudes)),
+        "eleMax": round(max(altitudes)),
         "fcMed": round(treino.get("fcMed") or (sum(fcs) / len(fcs) if fcs else 0)),
         "fcMax": round(treino.get("fcMax") or (max(fcs) if fcs else 0)),
         "fcMin": round(treino.get("fcMin") or (min(fcs) if fcs else 0)),
@@ -470,7 +591,8 @@ def processar_dia(n, data, de, para, caminho_gpx, cor, saude):
 
     return {
         "n": n, "data": data, "de": de, "para": para, "cor": cor,
-        "pontos": len(indices), "paradas": paradas, "marcos": marcos,
+        "pontos": len(serie["t"]), "medidos": medidos,
+        "paradas": paradas, "marcos": marcos, "trechos": trechos,
         "resumo": resumo, **serie,
     }
 
@@ -480,7 +602,7 @@ def main():
         raise SystemExit(f"Pasta nao encontrada: {DIR_RELOGIO}")
 
     export = os.path.join(DIR_RELOGIO, "export.xml")
-    if not os.path.exists(export):
+    if not os.path.exists(export) and not os.path.exists(CACHE_SAUDE):
         raise SystemExit(f"Arquivo nao encontrado: {export}")
 
     os.makedirs(DIR_DADOS, exist_ok=True)
@@ -499,7 +621,8 @@ def main():
     for i, (data, de, para) in enumerate(ETAPAS):
         if data not in gpxs:
             raise SystemExit(f"GPX ausente para {data}")
-        dia = processar_dia(i + 1, data, de, para, gpxs[data], cores[i], saude)
+        dia = processar_dia(i + 1, data, de, para, gpxs[data], cores[i], saude,
+                            ler_trecho(data))
         dias.append(dia)
         r = dia["resumo"]
         print(f"  Dia {dia['n']} {data}  {de} -> {para}")
