@@ -32,11 +32,15 @@ Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 | Etapa | Fotos | Vídeos | No repositório | No bucket R2 |
 |-------|-------|--------|----------------|--------------|
 | 1 · Braies → Sennes | 88 | 38 | 56 MB | 247 MB |
-| 2 · Sennes → Fanes | 71 | 15 | 57 MB | 79 MB |
-| 3 · Fanes → Lagazuoi | 91 | 36 | 53 MB | 168 MB |
-| 4 · Lagazuoi → Malga Giau | 67 | 27 | 30 MB | 135 MB |
-| 5 e 6 | — | — | — | — |
-| **total** | **317** | **116** | **196 MB** | **629 MB** |
+| 2 · Sennes → Fanes | 71 | 15 | 54 MB | 79 MB |
+| 3 · Fanes → Valparola | 91 | 36 | 52 MB | 168 MB |
+| 4 · Valparola → Malga Giau | 67 | 27 | 30 MB | 135 MB |
+| 5 · Malga Giau → Staulanza | 62 | 22 | 31 MB | 144 MB |
+| 6 · Staulanza → Borca | 48 | 9 | 23 MB | 163 MB |
+| **total** | **427** | **147** | **245 MB** | **936 MB** |
+
+Três fotos do dia 24 têm data de 25/09 e ficaram de fora: ou são do dia
+seguinte, ou perderam o EXIF. Para entrarem, é só dar a hora em `_hora_real`.
 
 ### Quando o arquivo perdeu a data
 
