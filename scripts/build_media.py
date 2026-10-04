@@ -9,8 +9,8 @@ foto, que falha entre paredes de rocha. O GPS do arquivo serve de conferencia.
 Roda sem erro com a pasta vazia: o site funciona sem midias e este script
 pode ser executado de novo a cada lote que chegar.
 
-Uso:  python3 scripts/build_media.py [--fuso +02:00] [--forcar]
-                                    [--crf 26] [--altura 1080]
+Uso:  python3 scripts/build_media.py [--de PASTA ...] [--fuso +02:00]
+                                    [--forcar] [--crf 26] [--altura 1080]
                                     [--videos-em URL | --videos-aqui]
 """
 
@@ -536,6 +536,28 @@ MARGEM_ANTES = 4 * 3600
 MARGEM_DEPOIS = 10 * 3600
 
 
+def nome_base(dia_n, rel, nome, usados):
+    """Identificador do arquivo publicado: dia, segundo da etapa e nome enxuto.
+
+    Os dois primeiros nem sempre bastam. Da etapa 5 em diante o nome da pasta
+    sozinho ja passa do corte: 'D5 Malga Giau-Passo Staulanza (12 de 61).jpg'
+    vira 'D5MalgaGiauPassoStaulanz' e perde justamente o numero que separa uma
+    foto da outra. Duas feitas no mesmo segundo iriam para o mesmo arquivo, e
+    uma apagaria a outra. Quando o nome ja esta tomado, entra um sufixo.
+
+    A ordem de varredura e a mesma a cada rodada, entao o sufixo tambem e.
+    """
+    limpo = re.sub(r"[^a-zA-Z0-9]+", "", os.path.splitext(nome)[0])[:24]
+    base = f"d{dia_n}_{int(rel):06d}_{limpo}"
+    if base in usados:
+        k = 2
+        while f"{base}_{k}" in usados:
+            k += 1
+        base = f"{base}_{k}"
+    usados.add(base)
+    return base
+
+
 def localizar_no_trajeto(dias, epoch):
     """Encontra o dia e a posicao correspondentes ao instante dado.
 
@@ -709,7 +731,20 @@ def main():
     with open(caminho_dias, encoding="utf-8") as fh:
         dias = json.load(fh)["dias"]
 
-    os.makedirs(DIR_MIDIAS, exist_ok=True)
+    # Os originais sao pesados e nem sempre cabem no disco da maquina. Com
+    # --de eles sao lidos onde estiverem; nada e copiado para o projeto.
+    origens = []
+    for i, a in enumerate(args):
+        if a == "--de":
+            if i + 1 >= len(args):
+                raise SystemExit("--de espera o caminho de uma pasta")
+            origens.append(os.path.abspath(os.path.expanduser(args[i + 1])))
+    for o in origens:
+        if not os.path.isdir(o):
+            raise SystemExit(f"Pasta nao encontrada: {o}")
+    if not origens:
+        origens = [DIR_MIDIAS]
+        os.makedirs(DIR_MIDIAS, exist_ok=True)
     os.makedirs(DIR_SAIDA, exist_ok=True)
     if base_videos:
         os.makedirs(DIR_VIDEOS, exist_ok=True)
@@ -718,22 +753,26 @@ def main():
         os.makedirs(DIR_SAIDA)
 
     arquivos = []
-    for pasta, _, nomes in os.walk(DIR_MIDIAS):
-        for nome in sorted(nomes):
-            if nome.startswith("."):
-                continue
-            ext = os.path.splitext(nome)[1].lower()
-            if ext in EXT_FOTO or ext in EXT_VIDEO:
-                arquivos.append(os.path.join(pasta, nome))
+    for origem in origens:
+        for pasta, _, nomes in os.walk(origem):
+            for nome in sorted(nomes):
+                if nome.startswith("."):
+                    continue
+                ext = os.path.splitext(nome)[1].lower()
+                if ext in EXT_FOTO or ext in EXT_VIDEO:
+                    arquivos.append(os.path.join(pasta, nome))
+    arquivos.sort()
 
     # Com a pasta vazia o trabalho nao e nenhum, mas o script segue ate o fim:
     # e preservar_etapas_antigas que mantem no media.json o que ja foi
     # publicado. Sair aqui apagaria do mapa todas as etapas anteriores.
+    onde = ", ".join(os.path.relpath(o, RAIZ) if o.startswith(RAIZ) else o
+                     for o in origens)
     if arquivos:
-        print(f"Encontradas {len(arquivos)} midias.\n")
+        print(f"Encontradas {len(arquivos)} midias em {onde}.\n")
     else:
-        print("Nenhuma midia nova em midias/.\n")
-    itens, sem_ancora = [], []
+        print(f"Nenhuma midia nova em {onde}.\n")
+    itens, sem_ancora, usados = [], [], set()
 
     for indice, caminho in enumerate(arquivos, 1):
         nome = os.path.basename(caminho)
@@ -752,7 +791,7 @@ def main():
             sem_ancora.append((nome, f"fora do periodo ({quando:%d/%m %H:%M})"))
             continue
 
-        base = f"d{dia['n']}_{int(rel):06d}_{re.sub(r'[^a-zA-Z0-9]+', '', os.path.splitext(nome)[0])[:24]}"
+        base = nome_base(dia["n"], rel, nome, usados)
         if ehvideo:
             arq = f"{base}.mp4"
             thumb = f"{base}_thumb.webp"

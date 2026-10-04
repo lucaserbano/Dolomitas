@@ -38,6 +38,8 @@ TABELA = os.path.join(RAIZ, "midias", "_datas.json")
 FUSO = timezone(timedelta(hours=2))          # CEST, o dos Dolomitas em setembro
 
 # Exportado do Mimo: o nome e o instante da exportacao, em milissegundos.
+# Nas etapas 5 e 6 o aplicativo passou a exportar como D5_0000_V1-0001.mov;
+# por isso qualquer video sem hora de captura tambem entra como exportado.
 RE_EXPORTADO = re.compile(r"^(\d{13})\.(MOV|JPG)$", re.I)
 # Cartao da Osmo: CAM_AAAAMMDDHHMMSS_NNNN_D.EXT, hora do relogio da camera.
 RE_CARTAO = re.compile(r"^CAM_(\d{14})_(\d{4})_D\.(\w+)$", re.I)
@@ -152,15 +154,39 @@ def tira_da_foto(caminho, larg, alt):
 def quando_do_arquivo(caminho, ehvideo):
     """Instante da captura, no fuso dos Dolomitas, ou None se nao houver.
 
-    Tres fontes, na ordem em que merecem credito: o EXIF da foto, os tags do
-    video e o Spotlight, que e quem le HEIC sem plugin nenhum.
+    Quatro fontes, na ordem em que merecem credito: o EXIF da foto, os tags do
+    video, o sips — que le o HEIC que a Pillow nao abre — e o Spotlight.
+
+    O sips vem antes do `mdls` porque devolve a hora como ela esta no arquivo,
+    sem fuso, enquanto o Spotlight carimba nela o fuso desta maquina: cinco
+    horas de erro numa foto feita na Europa e copiada no Brasil. E o `mdls`
+    ainda depende do indice, que nao existe em disco externo.
     """
     quando = None if ehvideo else _exif_quando(caminho)
     if quando is None and ehvideo:
         quando = _ffprobe_quando(caminho)
     if quando is None:
+        quando = _sips_quando(caminho)
+    if quando is None:
         quando = _mdls_quando(caminho)
     return quando
+
+
+EXT_SIPS = {".heic", ".heif"}
+
+
+def _sips_quando(caminho):
+    """Data de captura de um HEIC pelo sips, ja no fuso dos Dolomitas."""
+    if os.path.splitext(caminho)[1].lower() not in EXT_SIPS:
+        return None
+    saida = rodar(["sips", "-g", "creation", caminho]).decode("utf-8", "ignore")
+    m = re.search(r"creation:\s*(\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2})", saida)
+    if not m:
+        return None
+    try:
+        return datetime.strptime(m.group(1), "%Y:%m:%d %H:%M:%S").replace(tzinfo=FUSO)
+    except ValueError:
+        return None
 
 
 def _ffprobe_quando(caminho):
@@ -302,26 +328,34 @@ def coletar(args, dia):
         if nome.startswith("."):
             continue
         caminho = os.path.join(args.exportados, nome)
-        m = RE_EXPORTADO.match(nome)
-        if m:
-            video = m.group(2).upper() == "MOV"
-            dur = duracao(caminho) if video else 0.0
-            tira = (tira_do_video(caminho, [dur * 0.2, dur * 0.75], 190, 338,
-                                  lado_a_lado=True)
-                    if video else tira_da_foto(caminho, 190, 338))
-            exportados.append({"nome": nome, "video": video,
-                               "dur": round(dur, 1), "img": tira})
-            print(f"  {len(exportados):3d}  {nome}  {dur:5.1f}s")
-            continue
-
         ext = os.path.splitext(nome)[1].lower()
         if ext not in EXT_FOTO | EXT_VIDEO:
             continue
         ehvideo = ext in EXT_VIDEO
         # Nome do WhatsApp marca a chegada da mensagem, nao a captura: nunca
         # serve de referencia e sempre precisa de hora dada a mao.
-        quando = (None if RE_WHATSAPP.match(nome)
-                  else quando_do_arquivo(caminho, ehvideo))
+        whatsapp = bool(RE_WHATSAPP.match(nome))
+
+        exportado = bool(RE_EXPORTADO.match(nome))
+        if not exportado and ehvideo and not whatsapp:
+            # O Mimo ja trocou de padrao de nome mais de uma vez — nas etapas 5
+            # e 6 os clipes sairam como D5_0000_V1-0001.mov. O que define um
+            # exportado nao e o nome: e ser video sem hora de captura, e para
+            # video o cartao e o unico lugar onde essa hora sobrou.
+            q = quando_do_arquivo(caminho, True)
+            exportado = q is None or not (comeco <= q <= fim)
+
+        if exportado:
+            dur = duracao(caminho) if ehvideo else 0.0
+            tira = (tira_do_video(caminho, [dur * 0.2, dur * 0.75], 190, 338,
+                                  lado_a_lado=True)
+                    if ehvideo else tira_da_foto(caminho, 190, 338))
+            exportados.append({"nome": nome, "video": ehvideo,
+                               "dur": round(dur, 1), "img": tira})
+            print(f"  {len(exportados):3d}  {nome}  {dur:5.1f}s")
+            continue
+
+        quando = None if whatsapp else quando_do_arquivo(caminho, ehvideo)
         if quando is not None and not (comeco <= quando <= fim):
             print(f"    {nome}: {quando:%d/%m/%Y %H:%M} esta fora da travessia "
                   f"— nao e hora de captura, vai para a datacao a mao")

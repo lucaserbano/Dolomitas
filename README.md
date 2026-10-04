@@ -77,6 +77,9 @@ python3 scripts/parear_osmo.py --dia 3 \
     --cartao /Volumes/Untitled/DCIM/CAM_001
 ```
 
+`--exportados` também aceita o caminho de um disco externo, e `--saida`
+escolhe onde a página é escrita — útil para montar uma etapa por vez.
+
 Isso monta uma página em `pareamento/` com os exportados de um lado e os
 clipes do cartão do outro, cada um com três quadros, a hora já corrigida e
 o ponto da trilha onde você estava. O exportado em foco fica grande no alto
@@ -130,6 +133,13 @@ da imagem.
 
 Os originais são lidos onde estiverem; nada é copiado para o projeto.
 
+> **O que é "um exportado" não se decide pelo nome.** O Mimo já trocou de
+> padrão mais de uma vez: nas etapas 2 a 4 os clipes saíram como
+> `1791053951232.MOV`, o instante da exportação em milissegundos; nas etapas 5
+> e 6, como `D5_0000_V1-0001.mov`. O que define um exportado é não ter hora de
+> captura em lugar nenhum — e, sendo vídeo, o cartão é o único lugar onde essa
+> hora sobrou. É assim que a página os separa.
+
 > **O cruzamento automático não funciona com fonte 360.** Foi testado contra
 > o cartão da Osmo 360 e falhou: o cru é dual fisheye e o exportado é um
 > recorte reenquadrado dele, então as assinaturas ficam em 0,39–0,44 quando
@@ -179,6 +189,19 @@ arquivos de dados.
 1. Coloque os arquivos em `midias/` (subpastas são percorridas também).
 2. Rode `python3 scripts/build_media.py`.
 
+> **Se os originais não couberem no disco, não os copie.** Uma etapa dá uns
+> 5 GB, e `--de` lê de onde eles estiverem — um disco externo, por exemplo.
+> Nada é copiado para o projeto; só os derivados otimizados são gravados.
+>
+> ```bash
+> python3 scripts/build_media.py \
+>     --de "/Volumes/@enxerga/Dolomitas/Site/D5 Malga Giau-Passo Staulanza" \
+>     --de "/Volumes/@enxerga/Dolomitas/Site/D6 Passo Staulanza-Borca di Cadore"
+> ```
+>
+> A tabela de datas continua sendo lida de `midias/_datas.json`, que é do
+> projeto e não da pasta de origem.
+
 Cada arquivo é posicionado **pelo horário em que foi capturado**, cruzado
 com a série temporal do dia. Isso é mais confiável do que o GPS da foto,
 que erra feio entre paredes de rocha.
@@ -207,6 +230,7 @@ Opções úteis:
 
 | Opção | Para quê |
 |-------|----------|
+| `--de PASTA` | Lê os originais onde eles estiverem, em vez de `midias/` (pode repetir) |
 | `--fuso +02:00` | Fuso das fotos sem fuso declarado (padrão: CEST, o dos Dolomitas em setembro) |
 | `--crf 30` | Comprime mais os vídeos (padrão 26; quanto maior, menor o arquivo) |
 | `--altura 720` | Reduz a resolução dos vídeos (padrão 1080) |
