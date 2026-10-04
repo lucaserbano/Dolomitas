@@ -78,6 +78,12 @@ Essa tabela tem prioridade sobre qualquer metadado embutido. O próprio
 script imprime um esqueleto dela ao final, listando o que não conseguiu
 ancorar.
 
+> **`midias/_datas.json` é a única coisa de `midias/` que vai para o Git.**
+> São 166 horas pareadas à mão, uma a uma, contra os quadros do cartão. Não há
+> como refazê-las a partir de nada, e os originais que as justificam vão saindo
+> do disco à medida que as etapas são publicadas. Nove KB contra esse risco é
+> barato.
+
 **Para parear à mão**, que é o caminho que funciona com a Osmo 360:
 
 ```bash
@@ -590,6 +596,7 @@ Dados de relevo: [Mapterhorn][mt] (sem necessidade de chave de API).
 
 ```
 relogio/          GPX e export do Apple Health (fonte)
+midias/_datas.json  horas pareadas à mão (versionado; o resto de midias/ não)
 trechos/          pedaços andados fora do registro do relógio, traçados à mão
 extras/           atividades que não são da travessia, traçadas à mão
 midias/           suas fotos e vídeos originais (não versionado)

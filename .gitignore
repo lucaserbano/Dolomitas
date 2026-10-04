@@ -11,7 +11,12 @@ docs/data/.health_cache.json
 # As fotos e videos que saem do iPhone sao enormes (HEIC de 3-5 MB,
 # video 4K de centenas de MB). Apenas os derivados otimizados em
 # site/media/ vao para o repositorio.
-midias/
+midias/*
+
+# A tabela de datas e a excecao. Sao horas pareadas a mao, uma a uma,
+# contra os quadros do cartao — nao ha como refaze-las a partir de nada,
+# e os originais que as justificam vao saindo do disco. Nove KB.
+!midias/_datas.json
 
 # ── Sistema e ferramentas ──────────────────────────────────────────
 .DS_Store
