@@ -37,7 +37,12 @@ Mapa de terreno 3D com a travessia de seis dias pela Alta Via 1
 | 4 · Valparola → Malga Giau | 67 | 27 | 30 MB | 135 MB |
 | 5 · Malga Giau → Staulanza | 62 | 22 | 31 MB | 144 MB |
 | 6 · Staulanza → Borca | 48 | 9 | 23 MB | 163 MB |
-| **total** | **427** | **147** | **245 MB** | **936 MB** |
+| 7 · Cortina → San Vito, de bicicleta | 5 | 30 | 3 MB | 507 MB |
+| 8 · Auronzo → Forcella Lavaredo | 90 | 7 | 44 MB | 196 MB |
+| **total** | **522** | **184** | **292 MB** | **1.640 MB** |
+
+As duas últimas não são da travessia — ver
+[Atividades fora da travessia](#atividades-fora-da-travessia).
 
 Três fotos do dia 24 têm data de 25/09 e ficaram de fora: ou são do dia
 seguinte, ou perderam o EXIF. Para entrarem, é só dar a hora em `_hora_real`.
