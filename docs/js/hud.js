@@ -183,6 +183,32 @@ export function posicaoParaFracao(indiceDia, tempo) {
   return duracaoTotal ? (antes + tempo) / duracaoTotal : 0;
 }
 
+/* As mídias viram densidade, e não uma marca cada.
+
+   São quase seiscentas num trilho de poucas centenas de pixels: uma marca por
+   arquivo vira uma cerca que esconde a própria faixa, que é o que o trilho
+   precisa mostrar. Agrupadas em janelas de tempo iguais, a altura de cada
+   barra passa a dizer quantas caíram ali — e onde não houve foto nenhuma o
+   trilho fica limpo, que também é informação. */
+const JANELAS = 40;
+const ALTURAS = [3, 5, 7, 9, 11];
+
+function barrasDeMidia(dia, midias, dur) {
+  const caixas = new Map();
+  midias.forEach((m) => {
+    if (m.dia !== dia.n) return;
+    const k = Math.max(0, Math.min(JANELAS - 1, Math.floor((m.t / dur) * JANELAS)));
+    caixas.set(k, (caixas.get(k) ?? 0) + 1);
+  });
+  return [...caixas.entries()].sort((a, b) => a[0] - b[0]).map(([k, n]) => {
+    const barra = document.createElement("i");
+    barra.style.left = `${(k / JANELAS) * 100}%`;
+    barra.style.height = `${ALTURAS[Math.min(n, ALTURAS.length) - 1]}px`;
+    barra.title = `${n} ${n === 1 ? "mídia" : "mídias"}`;
+    return barra;
+  });
+}
+
 export function construirLinhaTempo(dias, midias, aoBuscar) {
   const trilho = $("#trilho");
   const scrub = $("#scrub");
@@ -204,7 +230,9 @@ export function construirLinhaTempo(dias, midias, aoBuscar) {
     const feito = document.createElement("div");
     feito.className = "faixa-feito";
 
-    // numero e destino separados: em telas estreitas so o numero fica
+    /* O número abre a faixa e o destino a fecha, encostado no risco que
+       marca o fim da etapa — é ali que se chegou. Em tela estreita só o
+       número fica. */
     const rotulo = document.createElement("span");
     rotulo.className = "faixa-rotulo";
     const num = document.createElement("b");
@@ -215,15 +243,11 @@ export function construirLinhaTempo(dias, midias, aoBuscar) {
     destino.textContent = dia.para;
     rotulo.append(num, destino);
 
-    el.append(feito, rotulo);
+    const lente = document.createElement("span");
+    lente.className = "faixa-midias";
+    lente.append(...barrasDeMidia(dia, midias, dur));
 
-    midias.filter((m) => m.dia === dia.n).forEach((m) => {
-      const marca = document.createElement("i");
-      marca.className = "marca-midia";
-      marca.style.left = `${(m.t / dur) * 100}%`;
-      el.appendChild(marca);
-    });
-
+    el.append(feito, lente, rotulo);
     trilho.appendChild(el);
     faixas.push({ el, feito, dur });
   });

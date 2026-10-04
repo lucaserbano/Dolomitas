@@ -616,6 +616,20 @@ button, input { font: inherit; color: inherit; }
 }
 .refugio[data-tipo="fim"]::before { background: var(--brasa); }
 
+/* lugar de paisagem: não se passou por ali, só se viu. O losango vira um
+   contorno vazio e o nome recua, para não competir com o trajeto. */
+.refugio[data-tipo="paisagem"] {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: color-mix(in oklab, var(--tinta) 62%, transparent);
+}
+.refugio[data-tipo="paisagem"]::before {
+  width: 6px; height: 6px;
+  background: transparent;
+  border: 1.5px solid color-mix(in oklab, var(--pedra) 75%, transparent);
+  rotate: 45deg;
+}
+
 /* ============================================================
    Barra de transporte
    ============================================================ */
@@ -663,22 +677,43 @@ button, input { font: inherit; color: inherit; }
   translate: 0 -50%;
   height: 100%;
   display: flex;
-  gap: 2px;
   align-items: stretch;
 }
 
+/* As faixas se encostam: quem separa uma etapa da outra é o risco do fim,
+   não um vão. Assim a troca de dia tem um lugar exato no trilho. */
 .faixa {
   position: relative;
   min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding-bottom: 7px;
+  padding: 0 9px 7px;
   cursor: pointer;
-  border-bottom: 2px solid color-mix(in oklab, var(--cor) 32%, transparent);
-  transition: border-color var(--transicao);
+  border-bottom: 2px solid color-mix(in oklab, var(--cor) 30%, transparent);
+  transition: border-color var(--transicao), background var(--transicao);
 }
 .faixa:hover { border-bottom-color: color-mix(in oklab, var(--cor) 70%, transparent); }
+/* a etapa em curso ganha chão, mas desbotado para cima: um retângulo inteiro
+   viraria uma caixa, e o trilho não tem caixas */
+.faixa.atual {
+  background: linear-gradient(to top,
+    color-mix(in oklab, var(--cor) 11%, transparent),
+    transparent 85%);
+}
+
+/* o risco da chegada — fim desta etapa e começo da seguinte */
+.faixa::after,
+.faixa:first-child::before {
+  content: "";
+  position: absolute;
+  right: 0; bottom: -2px;
+  width: 1px; height: 20px;
+  background: color-mix(in oklab, var(--cor) 60%, transparent);
+}
+/* a partida, que não é chegada de ninguém */
+.faixa:first-child::before { right: auto; left: 0; }
+.faixa:last-child::after { background: var(--cor); }
 
 /* trecho já percorrido */
 .faixa-feito {
@@ -690,27 +725,43 @@ button, input { font: inherit; color: inherit; }
 }
 .faixa.atual .faixa-rotulo { color: var(--cor); }
 
+/* número abre a faixa, destino a fecha encostado no risco da chegada */
 .faixa-rotulo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6em;
   font-size: 0.625rem;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--tinta-fraca);
+  transition: color var(--transicao);
+}
+.faixa-n { flex: none; opacity: 0.75; }
+.faixa-destino {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: color var(--transicao);
+  text-align: right;
 }
 
-/* marcas das mídias ao longo da faixa */
-.marca-midia {
+/* densidade das mídias: uma barra por janela de tempo, altura pelo tanto */
+.faixa-midias {
   position: absolute;
-  bottom: -2px;
-  width: 2px; height: 8px;
-  background: var(--tinta-meia);
-  translate: -1px 0;
+  left: 0; right: 0; bottom: 0;
+  height: 11px;
   pointer-events: none;
 }
+.faixa-midias i {
+  position: absolute;
+  bottom: 0;
+  width: calc(100% / 40 - 1px);
+  min-width: 1px;
+  background: color-mix(in oklab, var(--cor) 42%, transparent);
+}
+.faixa.atual .faixa-midias i { background: color-mix(in oklab, var(--cor) 72%, transparent); }
 
 #scrub {
   position: absolute;
@@ -925,7 +976,6 @@ button, input { font: inherit; color: inherit; }
    ============================================================ */
 
 .faixa-n { font-weight: 700; }
-.faixa-n + .faixa-destino::before { content: ". "; }
 
 @media (orientation: portrait), (max-width: 760px) {
   /* O card de etapa precisa se situar pela janela, e não pela área do
@@ -947,7 +997,9 @@ button, input { font: inherit; color: inherit; }
 /* abaixo disto o nome do refúgio vira reticências; só o número serve melhor */
 @media (max-width: 580px) {
   .faixa-destino { display: none; }
-  .faixa-rotulo { text-align: center; }
+  .faixa-rotulo { justify-content: center; }
+  .faixa { padding-inline: 2px; }
+  .faixa-midias { height: 7px; }
   .linha-tempo { height: 30px; }
 }
 
